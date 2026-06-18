@@ -1,12 +1,36 @@
-# DeepFind Tools Docker 部署
+# DeepFind Tools 部署说明
 
-后台数据默认写入 Docker Compose 里的 MySQL。应用启动时会优先连接 `DB_ENGINE=django.db.backends.mysql` 指向的数据库；如果数据库不可用，才会回退到 `data/db.json`。
+后台首次登录账号由环境变量控制：
 
-应用也保留 PostgreSQL 支持，但当前 `docker-compose.yml` 默认使用 MySQL 8.4，不需要另外购买云数据库。
+```bash
+ADMIN_USER=admin
+ADMIN_PASSWORD=change_this_admin_password
+```
 
-## 上线前同步本地数据
+如果你没有改 `.env`，代码里的兜底默认值是：
 
-如果你已经在本地后台新增或编辑过工具/资讯，先导出当前数据库到 `data/seed.json`：
+```bash
+账号：admin
+密码：admin123
+```
+
+正式上线一定要在 `.env` 里改掉 `ADMIN_PASSWORD`。
+
+## 数据库
+
+当前 `docker-compose.yml` 已经内置 MySQL 8.4，不需要单独购买云数据库。后台新增的工具、分类、每日快讯都会存进 Docker Compose 里的 MySQL。
+
+MySQL 数据会持久化在 Docker volume：
+
+```bash
+deepfindtools_mysql_data
+```
+
+正常执行 `docker compose down` 不会删除数据。只有执行 `docker compose down -v` 才会删除数据库 volume。
+
+## 同步本地数据到线上初始化数据
+
+如果你在本地后台新增或编辑了工具、分类、每日快讯，先导出当前本地数据：
 
 ```bash
 python scripts/export_seed.py
@@ -14,62 +38,85 @@ python scripts/export_seed.py
 
 然后提交并推送最新的 `data/seed.json`。服务器首次启动时，如果 MySQL 里的 `deepfind_tools` 为空，会自动建表并导入 `data/seed.json`。
 
-如果服务器 MySQL 已经启动过并产生了数据，`data/seed.json` 不会自动覆盖线上数据库，避免误删线上内容。
+注意：如果服务器 MySQL 已经有数据，`data/seed.json` 不会自动覆盖线上数据库，避免误删线上内容。
 
-## 服务器部署
-
-1. 复制环境变量模板：
+## 服务器启动
 
 ```bash
+git clone https://bs-101@github.com/bs-101/deepfindtools.git
+cd deepfindtools
 cp .env.example .env
+nano .env
+docker compose up -d --build
 ```
 
-2. 修改 `.env`：
+`.env` 里至少修改这些值：
 
 ```bash
 DB_PASSWORD=你的数据库强密码
 MYSQL_ROOT_PASSWORD=你的 MySQL root 强密码
+ADMIN_USER=admin
 ADMIN_PASSWORD=你的后台强密码
 APP_PORT=4173
 ```
 
-3. 启动：
+应用容器只监听服务器本机：
 
 ```bash
-docker compose up -d --build
+127.0.0.1:4173
 ```
 
-4. 查看日志：
+外网访问建议通过 Nginx 反向代理到这个端口。
+
+## Nginx
+
+项目里提供了模板：
 
 ```bash
-docker compose logs -f app
+deploy/nginx/deepfindtools.conf
 ```
 
-访问：
+在服务器上复制到 Nginx 配置目录：
 
-- 前台：`http://服务器IP:4173/`
-- 后台：`http://服务器IP:4173/login`
+```bash
+sudo cp deploy/nginx/deepfindtools.conf /etc/nginx/sites-available/deepfindtools.conf
+sudo nano /etc/nginx/sites-available/deepfindtools.conf
+```
 
-## 数据持久化
+把里面的域名替换成你的真实域名：
 
-MySQL 数据保存在 Docker volume：`deepfindtools_mysql_data`。不要随意删除这个 volume，否则后台新增的工具和资讯会丢失。
+```nginx
+server_name your-domain.com www.your-domain.com;
+```
 
-## 常用维护
+启用站点并重载 Nginx：
+
+```bash
+sudo ln -s /etc/nginx/sites-available/deepfindtools.conf /etc/nginx/sites-enabled/deepfindtools.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+如果要配置 HTTPS，建议用 Certbot：
+
+```bash
+sudo apt update
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+```
+
+## 常用维护命令
 
 ```bash
 docker compose ps
+docker compose logs -f app
 docker compose restart app
 docker compose down
 docker compose up -d --build
 ```
 
-## 重新用 seed 初始化
-
-只有在你确定要清空线上数据时才执行：
+后台地址：
 
 ```bash
-docker compose down -v
-docker compose up -d --build
+https://你的域名/login
 ```
-
-`down -v` 会删除 MySQL volume，线上后台新增的数据会丢失。

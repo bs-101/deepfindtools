@@ -39,7 +39,7 @@ services:
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
     ports:
-      - "${APP_PORT:-4173}:4173"
+      - "127.0.0.1:${APP_PORT:-4173}:4173"
 
 volumes:
   mysql_data:
