@@ -164,6 +164,148 @@ function categoryHref(id) {
   return `/category/${encodeURIComponent(id)}`;
 }
 
+const categoryIconMap = {
+  all: "grid",
+  writing: "pen",
+  image: "image",
+  video: "video",
+  office: "briefcase",
+  chat: "chat",
+  agent: "spark",
+  code: "code",
+  dev: "terminal",
+  platform: "terminal",
+  design: "palette",
+  audio: "wave",
+  search: "search",
+  learning: "book",
+  training: "cube",
+  model: "cube",
+  detector: "shield",
+  detect: "shield",
+  prompt: "prompt",
+  business: "stack",
+};
+
+function CategoryGlyph({ id }) {
+  const type = categoryIconMap[id] || "spark";
+
+  return (
+    <span className={`category-code category-icon-${type}`} aria-hidden="true">
+      {type === "grid" ? (
+        <svg viewBox="0 0 24 24">
+          <rect x="4" y="4" width="6" height="6" rx="1.6" />
+          <rect x="14" y="4" width="6" height="6" rx="1.6" />
+          <rect x="4" y="14" width="6" height="6" rx="1.6" />
+          <rect x="14" y="14" width="6" height="6" rx="1.6" />
+        </svg>
+      ) : null}
+      {type === "pen" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M4 20l4.3-1 10-10a2.1 2.1 0 0 0 0-3l-.3-.3a2.1 2.1 0 0 0-3 0l-10 10L4 20z" />
+          <path d="M13.8 6.9l3.3 3.3" />
+        </svg>
+      ) : null}
+      {type === "image" ? (
+        <svg viewBox="0 0 24 24">
+          <rect x="3.5" y="5" width="17" height="14" rx="3" />
+          <path d="M7 16l3.2-3.2 2.4 2.4 2.1-2.1L18 16" />
+          <circle className="fill-dot" cx="8.4" cy="9.2" r="1.5" />
+        </svg>
+      ) : null}
+      {type === "video" ? (
+        <svg viewBox="0 0 24 24">
+          <rect x="3.5" y="6" width="12.5" height="12" rx="2.5" />
+          <path d="M16 10l4-2.2v8.4L16 14z" />
+        </svg>
+      ) : null}
+      {type === "briefcase" ? (
+        <svg viewBox="0 0 24 24">
+          <rect x="3.5" y="7" width="17" height="12" rx="2.5" />
+          <path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7" />
+          <path d="M3.5 12h17" />
+        </svg>
+      ) : null}
+      {type === "chat" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M5 6.5h14v9H9l-4 3v-12z" />
+          <path d="M8.2 10.2h7.6M8.2 13h4.8" />
+        </svg>
+      ) : null}
+      {type === "spark" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3l1.8 5 5.2 1.8-5.2 1.8L12 17l-1.8-5.4L5 9.8 10.2 8z" />
+          <path d="M18.5 14.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" />
+        </svg>
+      ) : null}
+      {type === "code" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M9 7l-5 5 5 5" />
+          <path d="M15 7l5 5-5 5" />
+          <path d="M13 5l-2 14" />
+        </svg>
+      ) : null}
+      {type === "terminal" ? (
+        <svg viewBox="0 0 24 24">
+          <rect x="3.5" y="5" width="17" height="14" rx="2.5" />
+          <path d="M7 9l3 3-3 3" />
+          <path d="M12.5 15h4" />
+        </svg>
+      ) : null}
+      {type === "palette" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M12 4a8 8 0 0 0-1 15.9c1.3.1 1.7-.8 1.3-1.8-.5-1.2.3-2.1 1.7-2.1h1.2A4.8 4.8 0 0 0 20 11.2C20 7.2 16.4 4 12 4z" />
+          <circle className="fill-dot" cx="8.2" cy="10" r="1.2" />
+          <circle className="fill-dot" cx="11.4" cy="8" r="1.2" />
+          <circle className="fill-dot" cx="14.7" cy="10" r="1.2" />
+        </svg>
+      ) : null}
+      {type === "wave" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M4 13v-2M8 17V7M12 20V4M16 17V7M20 13v-2" />
+        </svg>
+      ) : null}
+      {type === "search" ? (
+        <svg viewBox="0 0 24 24">
+          <circle cx="10.8" cy="10.8" r="5.8" />
+          <path d="M15.2 15.2L20 20" />
+        </svg>
+      ) : null}
+      {type === "book" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M5 5.5A3 3 0 0 1 8 4h11v15H8a3 3 0 0 0-3 1.5z" />
+          <path d="M5 5.5v15M9 8h6" />
+        </svg>
+      ) : null}
+      {type === "cube" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3.8l7 4v8.4l-7 4-7-4V7.8z" />
+          <path d="M5 7.8l7 4 7-4M12 11.8v8.4" />
+        </svg>
+      ) : null}
+      {type === "shield" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3.8l7 2.4v5.4c0 4.2-2.8 7-7 8.6-4.2-1.6-7-4.4-7-8.6V6.2z" />
+          <path d="M9.2 12.1l2 2 4-4" />
+        </svg>
+      ) : null}
+      {type === "prompt" ? (
+        <svg viewBox="0 0 24 24">
+          <rect x="4" y="5" width="16" height="14" rx="3" />
+          <path d="M8 10h8M8 14h5" />
+          <circle className="fill-dot" cx="16.5" cy="14" r="1" />
+        </svg>
+      ) : null}
+      {type === "stack" ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M12 4l8 4-8 4-8-4z" />
+          <path d="M4 12l8 4 8-4M4 16l8 4 8-4" />
+        </svg>
+      ) : null}
+    </span>
+  );
+}
+
 function sortAndFilterTools(tools, categories, query, sort = "featured") {
   const keyword = query.trim().toLowerCase();
   return tools
@@ -252,7 +394,7 @@ function Sidebar({ categories, activeSection, onCategoryClick }) {
               type="button"
               onClick={() => onCategoryClick(item.id)}
             >
-              <span className="category-code">{item.icon || item.name.slice(0, 1)}</span>
+              <CategoryGlyph id={item.id} />
               <span>{item.name}</span>
               <small>{item.count}</small>
             </button>
@@ -307,7 +449,6 @@ function HeroSearch({ query, setQuery }) {
 
   return (
     <section className="hero-search">
-      <span className="domain-pill">AI-BOT.CN</span>
       <div className="hero-brand">
         <span className="hero-mark">AI</span>
         <h1>AI工具集</h1>

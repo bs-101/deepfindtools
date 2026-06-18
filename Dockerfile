@@ -8,6 +8,7 @@ RUN npm ci
 COPY index.html vite.config.js ./
 COPY src ./src
 COPY assets ./assets
+COPY public ./public
 RUN npm run build
 
 FROM python:3.12-slim AS runtime

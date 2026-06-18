@@ -142,15 +142,53 @@ button {
 }
 
 .category-code {
+  position: relative;
   display: grid;
   width: 28px;
   height: 28px;
+  overflow: hidden;
   place-items: center;
-  border-radius: 6px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 8px;
   color: #1d4ed8;
-  background: #eaf1ff;
-  font-size: 12px;
-  font-weight: 950;
+  background: linear-gradient(135deg, #eef4ff 0%, #f8fbff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.category-code::after {
+  content: "";
+  position: absolute;
+  right: -7px;
+  bottom: -8px;
+  width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.13);
+}
+
+.category-code svg {
+  position: relative;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.category-code .fill-dot {
+  fill: currentColor;
+  stroke: none;
+}
+
+.category-tune:hover .category-code,
+.category-tune.active .category-code {
+  border-color: transparent;
+  color: #fff;
+  background: linear-gradient(135deg, #7b61ff 0%, #5f7cff 48%, #38c9f4 100%);
+  box-shadow: 0 10px 18px rgba(87, 103, 255, 0.22);
 }
 
 .category-tune small {
@@ -1006,10 +1044,7 @@ body {
 .category-code {
   width: 28px;
   height: 28px;
-  border-radius: 7px;
-  color: #3157ff;
-  background: #eaf0ff;
-  font-size: 12px;
+  border-radius: 8px;
 }
 
 .rail-footer {
@@ -1085,26 +1120,14 @@ body {
 .hero-search {
   display: grid;
   justify-items: center;
-  padding: 10px 0 48px;
-}
-
-.domain-pill {
-  border: 1px solid #e4e1f6;
-  border-radius: 999px;
-  padding: 8px 18px;
-  color: #626376;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: inset 0 0 0 3px rgba(122, 109, 255, 0.04);
-  font-size: 14px;
-  font-weight: 950;
-  font-style: italic;
+  padding: 20px 0 48px;
 }
 
 .hero-brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 18px 0 30px;
+  margin: 0 0 30px;
 }
 
 .hero-mark {
@@ -1986,7 +2009,7 @@ body {
 
 /* Focused polish pass: search modes, card symbols, and news hero artwork. */
 .hero-search {
-  padding: 8px 0 44px;
+  padding: 20px 0 44px;
 }
 
 .search-tabs {
