@@ -14,6 +14,13 @@ import time
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
+try:
+    import pymysql
+    from pymysql.cursors import DictCursor as MySqlDictCursor
+except ImportError:
+    pymysql = None
+    MySqlDictCursor = None
+
 
 ROOT = Path(__file__).resolve().parent
 DIST_DIR = ROOT / "dist"
@@ -54,9 +61,27 @@ def db_config():
     }
 
 
+def mysql_config():
+    return {
+        "database": os.environ.get("DB_NAME", "adops_db"),
+        "user": os.environ.get("DB_USER", "adops_user"),
+        "password": os.environ.get("DB_PASSWORD", "your_password"),
+        "host": os.environ.get("DB_HOST", "localhost"),
+        "port": int(os.environ.get("DB_PORT", "3306")),
+        "charset": "utf8mb4",
+        "connect_timeout": 5,
+        "autocommit": False,
+    }
+
+
 def wants_postgres():
     engine = os.environ.get("DB_ENGINE", "django.db.backends.postgresql")
     return "postgres" in engine.lower()
+
+
+def wants_mysql():
+    engine = os.environ.get("DB_ENGINE", "django.db.backends.postgresql")
+    return "mysql" in engine.lower() or "mariadb" in engine.lower()
 
 
 class JsonStore:
@@ -225,7 +250,153 @@ class PostgresStore:
             self.seed(cur)
 
 
+class MySqlStore:
+    name = "mysql"
+
+    def connect(self):
+        if pymysql is None:
+            raise RuntimeError("PyMySQL is not installed")
+        return pymysql.connect(**mysql_config())
+
+    def ensure(self):
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    create table if not exists deepfind_categories (
+                        id varchar(191) primary key,
+                        name varchar(255) not null,
+                        icon varchar(64),
+                        sort_order integer default 0
+                    ) character set utf8mb4 collate utf8mb4_unicode_ci
+                    """
+                )
+                cur.execute(
+                    """
+                    create table if not exists deepfind_tools (
+                        id varchar(191) primary key,
+                        payload json not null,
+                        created_at timestamp default current_timestamp
+                    ) character set utf8mb4 collate utf8mb4_unicode_ci
+                    """
+                )
+                cur.execute(
+                    """
+                    create table if not exists deepfind_news (
+                        id varchar(191) primary key,
+                        payload json not null,
+                        created_at timestamp default current_timestamp
+                    ) character set utf8mb4 collate utf8mb4_unicode_ci
+                    """
+                )
+                cur.execute("select count(*) from deepfind_tools")
+                empty = cur.fetchone()[0] == 0
+                if empty:
+                    self.seed(cur)
+            conn.commit()
+
+    def seed(self, cur):
+        seed = read_json(SEED_PATH)
+        for index, category in enumerate(seed.get("categories", [])):
+            cur.execute(
+                """
+                insert into deepfind_categories (id, name, icon, sort_order)
+                values (%s, %s, %s, %s)
+                on duplicate key update name = values(name), icon = values(icon), sort_order = values(sort_order)
+                """,
+                (category["id"], category["name"], category.get("icon", ""), index),
+            )
+        for tool in seed.get("tools", []):
+            cur.execute(
+                "insert ignore into deepfind_tools (id, payload) values (%s, %s)",
+                (str(tool["id"]), json.dumps(tool, ensure_ascii=False)),
+            )
+        for item in seed.get("news", []):
+            cur.execute(
+                "insert ignore into deepfind_news (id, payload) values (%s, %s)",
+                (str(item["id"]), json.dumps(item, ensure_ascii=False)),
+            )
+
+    def categories(self):
+        with self.connect() as conn, conn.cursor(MySqlDictCursor) as cur:
+            cur.execute("select id, name, icon from deepfind_categories order by sort_order, name")
+            return [dict(row) for row in cur.fetchall()]
+
+    def read_payloads(self, table):
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute(f"select payload from {table} order by created_at desc, id desc")
+            rows = cur.fetchall()
+        payloads = []
+        for row in rows:
+            value = row[0]
+            payloads.append(json.loads(value) if isinstance(value, str) else value)
+        return payloads
+
+    def tools(self, include_drafts=False):
+        tools = self.read_payloads("deepfind_tools")
+        return tools if include_drafts else [item for item in tools if item.get("status", "published") == "published"]
+
+    def news(self, include_drafts=False):
+        news = self.read_payloads("deepfind_news")
+        return news if include_drafts else [item for item in news if item.get("status", "published") == "published"]
+
+    def create(self, collection, payload):
+        table = "deepfind_tools" if collection == "tools" else "deepfind_news"
+        prefix = "tool" if collection == "tools" else "news"
+        payload["id"] = payload.get("id") or next_id(prefix)
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"insert into {table} (id, payload) values (%s, %s)",
+                    (str(payload["id"]), json.dumps(payload, ensure_ascii=False)),
+                )
+            conn.commit()
+        return payload
+
+    def update(self, collection, item_id, payload):
+        table = "deepfind_tools" if collection == "tools" else "deepfind_news"
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"select payload from {table} where id = %s", (str(item_id),))
+                row = cur.fetchone()
+                if not row:
+                    return None
+                current_payload = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+                next_payload = {**current_payload, **payload, "id": current_payload.get("id", item_id)}
+                cur.execute(
+                    f"update {table} set payload = %s where id = %s",
+                    (json.dumps(next_payload, ensure_ascii=False), str(item_id)),
+                )
+            conn.commit()
+        return next_payload
+
+    def delete(self, collection, item_id):
+        table = "deepfind_tools" if collection == "tools" else "deepfind_news"
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"delete from {table} where id = %s", (str(item_id),))
+                ok = cur.rowcount > 0
+            conn.commit()
+        return ok
+
+    def reset(self):
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("truncate table deepfind_tools")
+                cur.execute("truncate table deepfind_news")
+                cur.execute("truncate table deepfind_categories")
+                self.seed(cur)
+            conn.commit()
+
+
 def make_store():
+    if wants_mysql():
+        try:
+            store = MySqlStore()
+            store.ensure()
+            return store
+        except Exception as exc:
+            print(f"MySQL unavailable, falling back to JSON: {exc}")
     if wants_postgres():
         try:
             store = PostgresStore()

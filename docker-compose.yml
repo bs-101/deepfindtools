@@ -1,40 +1,45 @@
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: deepfindtools-db
+  mysql:
+    image: mysql:8.4
+    container_name: deepfindtools-mysql
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME:-adops_db}
-      POSTGRES_USER: ${DB_USER:-adops_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-your_password}
+      MYSQL_DATABASE: ${DB_NAME:-adops_db}
+      MYSQL_USER: ${DB_USER:-adops_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-your_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+      TZ: ${TZ:-Asia/Shanghai}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-adops_user} -d ${DB_NAME:-adops_db}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u${DB_USER:-adops_user} -p${DB_PASSWORD:-your_password} --silent"]
       interval: 5s
       timeout: 5s
-      retries: 20
+      retries: 30
 
   app:
     build: .
     container_name: deepfindtools-app
     restart: unless-stopped
     depends_on:
-      db:
+      mysql:
         condition: service_healthy
     environment:
       HOST: 0.0.0.0
       PORT: 4173
-      DB_ENGINE: django.db.backends.postgresql
+      DB_ENGINE: ${DB_ENGINE:-django.db.backends.mysql}
       DB_NAME: ${DB_NAME:-adops_db}
       DB_USER: ${DB_USER:-adops_user}
       DB_PASSWORD: ${DB_PASSWORD:-your_password}
-      DB_HOST: db
-      DB_PORT: 5432
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_PORT: ${DB_PORT:-3306}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
     ports:
       - "${APP_PORT:-4173}:4173"
 
 volumes:
-  postgres_data:
+  mysql_data:
