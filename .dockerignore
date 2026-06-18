@@ -1,0 +1,11 @@
+.git
+.playwright-cli
+.npm-cache
+.tools
+__pycache__
+*.pyc
+node_modules
+output
+qa-*.png
+dist
+.env

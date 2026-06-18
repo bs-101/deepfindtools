@@ -29,6 +29,90 @@ const api = {
   },
 };
 
+const searchModes = [
+  {
+    id: "common",
+    label: "常用",
+    providers: [
+      { label: "站内", placeholder: "站内AI工具搜索", type: "site" },
+      { label: "Bing", placeholder: "微软Bing搜索", url: "https://www.bing.com/search?q=%s" },
+      { label: "百度", placeholder: "百度搜索", url: "https://www.baidu.com/s?wd=%s" },
+      { label: "Google", placeholder: "Google搜索", url: "https://www.google.com/search?q=%s" },
+      { label: "Perplexity", placeholder: "Perplexity搜索", url: "https://www.perplexity.ai/search?q=%s" },
+    ],
+  },
+  {
+    id: "search",
+    label: "搜索",
+    providers: [
+      { label: "Bing", placeholder: "微软Bing搜索", url: "https://www.bing.com/search?q=%s" },
+      { label: "百度", placeholder: "百度搜索", url: "https://www.baidu.com/s?wd=%s" },
+      { label: "Google", placeholder: "Google搜索", url: "https://www.google.com/search?q=%s" },
+      { label: "Perplexity", placeholder: "Perplexity搜索", url: "https://www.perplexity.ai/search?q=%s" },
+      { label: "YOU", placeholder: "You.com搜索", url: "https://you.com/search?q=%s" },
+      { label: "360", placeholder: "360搜索", url: "https://www.so.com/s?q=%s" },
+      { label: "搜狗", placeholder: "搜狗搜索", url: "https://www.sogou.com/web?query=%s" },
+      { label: "神马", placeholder: "神马搜索", url: "https://m.sm.cn/s?q=%s" },
+    ],
+  },
+  {
+    id: "community",
+    label: "社区",
+    providers: [
+      { label: "Hugging Face", placeholder: "Hugging Face AI模型社区", url: "https://huggingface.co/search/full-text?q=%s" },
+      { label: "GitHub", placeholder: "GitHub开源项目搜索", url: "https://github.com/search?q=%s" },
+      { label: "飞桨", placeholder: "飞桨AI Studio搜索", url: "https://aistudio.baidu.com/search?query=%s" },
+      { label: "魔搭", placeholder: "魔搭社区模型搜索", url: "https://modelscope.cn/models?name=%s" },
+      { label: "和鲸", placeholder: "和鲸社区搜索", url: "https://www.heywhale.com/search?keyword=%s" },
+      { label: "掘金", placeholder: "掘金AI文章搜索", url: "https://juejin.cn/search?query=%s" },
+      { label: "知乎", placeholder: "知乎AI话题搜索", url: "https://www.zhihu.com/search?type=content&q=%s" },
+    ],
+  },
+];
+
+const fallbackNews = [
+  {
+    id: "fallback-1",
+    title: "SpaceX 600亿美元收购 Cursor",
+    summary:
+      "市场传闻称大型科技公司持续加码 AI 编程工具，代码生成、代理式开发和模型训练生态会成为下一阶段基础设施竞争重点。",
+    sourceName: "机器之心",
+    publishedAt: "2026-06-17",
+    kind: "资讯",
+    status: "published",
+  },
+  {
+    id: "fallback-2",
+    title: "DeepSeek首次融资落地，募集超500亿，估值超3300亿元",
+    summary:
+      "国产大模型公司继续吸引长期资金进入，模型能力、算力供给和生态合作成为投资人判断 AI 公司价值的核心变量。",
+    sourceName: "机器之心",
+    publishedAt: "2026-06-17",
+    kind: "资讯",
+    status: "published",
+  },
+  {
+    id: "fallback-3",
+    title: "智谱上线并开源 GLM-5.2，专注 Coding 与长程任务",
+    summary:
+      "新一代模型强化长上下文、代码生成和复杂任务执行能力，正在把 AI 工具从单点问答推向可持续协作的工作流。",
+    sourceName: "智谱",
+    publishedAt: "2026-06-17",
+    kind: "模型",
+    status: "published",
+  },
+  {
+    id: "fallback-4",
+    title: "MiniMax 开源原生多模态旗舰模型 MiniMax M3",
+    summary:
+      "多模态模型继续降低视频、图片、音频与文本的跨媒介创作门槛，设计和内容团队会获得更多可嵌入流程的生产工具。",
+    sourceName: "MiniMax",
+    publishedAt: "2026-06-16",
+    kind: "模型",
+    status: "published",
+  },
+];
+
 function useData(includeDrafts = false) {
   const [data, setData] = useState({ tools: [], categories: [], news: [], loading: true });
 
@@ -61,6 +145,42 @@ function categoryName(categories, id) {
   return categories.find((category) => category.id === id)?.name || "未分类";
 }
 
+function getCategoryItems(categories, tools) {
+  const all = { id: "all", name: "全部工具", icon: "A", count: tools.length };
+  return [all].concat(
+    categories.map((item) => ({
+      ...item,
+      count: tools.filter((tool) => tool.category === item.id).length,
+    })),
+  );
+}
+
+function sectionId(id) {
+  return id === "all" ? "tools-index" : `category-${id}`;
+}
+
+function categoryHref(id) {
+  if (id === "all") return "/";
+  return `/category/${encodeURIComponent(id)}`;
+}
+
+function sortAndFilterTools(tools, categories, query, sort = "featured") {
+  const keyword = query.trim().toLowerCase();
+  return tools
+    .filter((tool) => {
+      if (!keyword) return true;
+      return [tool.name, tool.summary, categoryName(categories, tool.category), ...(tool.tags || [])]
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword);
+    })
+    .sort((a, b) => {
+      if (sort === "new") return Number(b.isNew) - Number(a.isNew) || String(b.id).localeCompare(String(a.id));
+      if (sort === "popular") return Number(b.featured) - Number(a.featured) || String(a.name).localeCompare(String(b.name));
+      return Number(b.featured) - Number(a.featured) || Number(b.isNew) - Number(a.isNew);
+    });
+}
+
 function Logo({ tool, size = "normal" }) {
   const [failed, setFailed] = useState(false);
   const hasLogo = Boolean(tool?.logo && !failed);
@@ -69,10 +189,6 @@ function Logo({ tool, size = "normal" }) {
       {hasLogo ? <img src={tool.logo} alt="" loading="lazy" onError={() => setFailed(true)} /> : null}
     </span>
   );
-}
-
-function sectionId(id) {
-  return id === "all" ? "tools-index" : `category-${id}`;
 }
 
 function SpotlightCard({ className = "", children, as: Tag = "article", ...props }) {
@@ -92,6 +208,134 @@ function SpotlightCard({ className = "", children, as: Tag = "article", ...props
   );
 }
 
+function FrontShell({ tools, categories, activeSection = "all", onCategoryClick, query, setQuery, children, hero = true }) {
+  const categoryItems = useMemo(() => getCategoryItems(categories, tools), [categories, tools]);
+
+  function goCategory(id) {
+    if (onCategoryClick) {
+      onCategoryClick(id);
+      return;
+    }
+    window.location.href = categoryHref(id);
+  }
+
+  return (
+    <div className="app-frame">
+      <Sidebar categories={categoryItems} activeSection={activeSection} onCategoryClick={goCategory} />
+      <main className="workspace">
+        <TopNav />
+        {hero ? <HeroSearch query={query} setQuery={setQuery} /> : null}
+        {children}
+      </main>
+    </div>
+  );
+}
+
+function Sidebar({ categories, activeSection, onCategoryClick }) {
+  return (
+    <aside className="rail">
+      <a className="brand" href="/">
+        <span className="brand-mark">AI</span>
+        <span>
+          <strong>AI工具集</strong>
+          <small>ai tools directory</small>
+        </span>
+      </a>
+
+      <div className="rail-section">
+        <p className="rail-label">AI 工具分类</p>
+        <nav className="category-stack" aria-label="工具分类">
+          {categories.map((item) => (
+            <button
+              className={`category-tune ${activeSection === item.id ? "active" : ""}`}
+              key={item.id}
+              type="button"
+              onClick={() => onCategoryClick(item.id)}
+            >
+              <span className="category-code">{item.icon || item.name.slice(0, 1)}</span>
+              <span>{item.name}</span>
+              <small>{item.count}</small>
+            </button>
+          ))}
+        </nav>
+      </div>
+    </aside>
+  );
+}
+
+function TopNav() {
+  return (
+    <header className="top-nav">
+      <button className="menu-button" type="button" aria-label="展开菜单">
+        <span />
+        <span />
+        <span />
+      </button>
+      <nav aria-label="顶部导航">
+        <a href="/">AI工具集</a>
+        <a href="/category/agent">AI应用集</a>
+        <a href="/daily-ai-news/">每日AI资讯</a>
+        <a href="/category/latest">最新AI项目</a>
+        <a href="/category/learning">AI教程资源</a>
+        <a href="/#tools-index">关于我们</a>
+      </nav>
+    </header>
+  );
+}
+
+function HeroSearch({ query, setQuery }) {
+  const [modeId, setModeId] = useState("common");
+  const [providerIndex, setProviderIndex] = useState(0);
+  const mode = searchModes.find((item) => item.id === modeId) || searchModes[0];
+  const provider = mode.providers[providerIndex] || mode.providers[0];
+
+  function switchMode(nextId) {
+    setModeId(nextId);
+    setProviderIndex(0);
+  }
+
+  function submitSearch(event) {
+    event.preventDefault();
+    const keyword = query.trim();
+    if (provider.type === "site") {
+      if (keyword) document.getElementById("search-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (!keyword) return;
+    window.open(provider.url.replace("%s", encodeURIComponent(keyword)), "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <section className="hero-search">
+      <span className="domain-pill">AI-BOT.CN</span>
+      <div className="hero-brand">
+        <span className="hero-mark">AI</span>
+        <h1>AI工具集</h1>
+      </div>
+      <div className="search-tabs" aria-label="搜索模式">
+        {searchModes.map((item) => (
+          <button key={item.id} className={modeId === item.id ? "active" : ""} type="button" onClick={() => switchMode(item.id)}>
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <form className="command-bar" onSubmit={submitSearch}>
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={provider.placeholder} />
+        <button type="submit" aria-label="搜索">
+          搜索
+        </button>
+      </form>
+      <div className="search-provider-row" aria-label="搜索来源">
+        {mode.providers.map((item, index) => (
+          <button key={item.label} className={index === providerIndex ? "active" : ""} type="button" onClick={() => setProviderIndex(index)}>
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function HomePage() {
   const { tools, categories, news, loading } = useData(false);
   const [activeSection, setActiveSection] = useState("all");
@@ -104,225 +348,339 @@ function HomePage() {
     document.getElementById(sectionId(id))?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  const categoryItems = useMemo(() => {
-    const all = { id: "all", name: "全部工具", icon: "A", count: tools.length };
-    return [all].concat(
-      categories.map((item) => ({
-        ...item,
-        count: tools.filter((tool) => tool.category === item.id).length,
-      })),
-    );
-  }, [categories, tools]);
-
-  const sortedTools = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    return tools
-      .filter((tool) => {
-        if (!keyword) return true;
-        return [tool.name, tool.summary, categoryName(categories, tool.category), ...(tool.tags || [])]
-          .join(" ")
-          .toLowerCase()
-          .includes(keyword);
-      })
-      .sort((a, b) => {
-        if (sort === "new") return Number(b.isNew) - Number(a.isNew) || String(b.id).localeCompare(String(a.id));
-        if (sort === "popular") return Number(b.featured) - Number(a.featured) || String(a.name).localeCompare(String(b.name));
-        return Number(b.featured) - Number(a.featured) || Number(b.isNew) - Number(a.isNew);
-      });
-  }, [tools, categories, query, sort]);
-
+  const sortedTools = useMemo(() => sortAndFilterTools(tools, categories, query, sort), [tools, categories, query, sort]);
   const filteredNews = news.filter((item) => item.status !== "draft" && (newsFilter === "all" || item.kind === newsFilter));
   const featuredTools = tools.filter((tool) => tool.featured).slice(0, 12);
-  const latestTools = tools.filter((tool) => tool.isNew).slice(0, 8);
+  const latestTools = tools.filter((tool) => tool.isNew).slice(0, 12);
   const homeSections = categories.filter((item) => tools.some((tool) => tool.category === item.id));
-  const categoryMap = useMemo(() => new Map(categories.map((item) => [item.name, item.id])), [categories]);
-  const quickLinks = [
-    { label: "AI写作", category: "AI写作工具" },
-    { label: "AI图像", category: "AI图像工具" },
-    { label: "AI视频", category: "AI视频工具" },
-    { label: "AI办公", category: "AI办公工具" },
-    { label: "AI编程", category: "AI编程工具" },
-    { label: "AI搜索", category: "AI搜索引擎" },
-  ];
 
   return (
-    <div className="app-frame">
-      <aside className="rail">
-        <a className="brand" href="/">
-          <span className="brand-mark">D</span>
-          <span>
-            <strong>DeepFind</strong>
-            <small>AI tools directory</small>
-          </span>
-        </a>
+    <FrontShell tools={tools} categories={categories} activeSection={activeSection} onCategoryClick={scrollToCategory} query={query} setQuery={setQuery}>
+      <PortalStrip />
 
-        <div className="rail-section">
-          <p className="rail-label">AI 工具分类</p>
-          <nav className="category-stack" aria-label="工具分类">
-            {categoryItems.map((item) => (
-              <button
-                className={`category-tune ${activeSection === item.id ? "active" : ""}`}
-                key={item.id}
-                type="button"
-                onClick={() => scrollToCategory(item.id)}
-              >
-                <span className="category-code">{item.icon || item.name.slice(0, 1)}</span>
-                <span>{item.name}</span>
-                <small>{item.count}</small>
-              </button>
-            ))}
-          </nav>
+      <section className="ad-bands" aria-label="推荐入口">
+        <div className="ad-band frog-band">
+          <strong>蛙蛙写作</strong>
+          <span>一站式 AI 创作平台，从小说、剧本到漫画视频</span>
+          <button type="button" onClick={() => setQuery("蛙蛙")}>免费使用</button>
         </div>
-
-        <div className="rail-footer">
-          <span>目录结构</span>
-          <strong>首页推荐 / 分类索引 / 每日资讯</strong>
+        <div className="ad-band qoder-band">
+          <strong>QoderWork</strong>
+          <span>你的 AI 办公搭子，描述需求、自主执行、直接交付结果</span>
+          <button type="button" onClick={() => setQuery("Qoder")}>领取会员</button>
         </div>
-      </aside>
+      </section>
 
-      <main className="workspace">
-        <section className="hero-zone">
-          <SpotlightCard className="hero-copy" as="div">
-            <p className="eyebrow">AI tools directory</p>
-            <h1>AI 工具导航</h1>
-            <p>
-              汇总常用 AI 写作、图像、视频、办公、聊天、智能体、编程、搜索和学习资源。按目录浏览、按关键词检索，快速找到适合当前任务的工具。
-            </p>
-            <div className="command-bar">
-              <span>搜索</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索工具名称、标签或使用场景" />
-              <button type="button" onClick={() => setQuery("")}>
-                清空
-              </button>
-            </div>
-            <div className="quick-links" aria-label="常用入口">
-              {quickLinks.map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => {
-                    if (categoryMap.has(item.category)) scrollToCategory(categoryMap.get(item.category));
-                  }}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </SpotlightCard>
+      <section className="control-strip">
+        <span className="hot-pill">热门工具</span>
+        <div className="segment">
+          {[
+            ["featured", "推荐"],
+            ["new", "最新"],
+            ["popular", "热门"],
+          ].map(([id, label]) => (
+            <button key={id} className={sort === id ? "active" : ""} type="button" onClick={() => setSort(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <p>{loading ? "正在接收工具信号..." : `显示 ${query.trim() ? sortedTools.length : tools.length} / ${tools.length} 个工具`}</p>
+      </section>
 
-          <SpotlightCard className="directory-panel" as="div">
-            <div className="directory-card-head">
-              <p className="eyebrow">site index</p>
-              <h2>工具目录层级</h2>
-              <p>参考成熟 AI 工具导航的信息组织方式，重组为适合本项目上线的原创白色界面。</p>
-            </div>
-            <div className="directory-stats">
-              <div>
-                <strong>{tools.length}</strong>
-                <span>收录工具</span>
-              </div>
-              <div>
-                <strong>{categories.length}</strong>
-                <span>一级分类</span>
-              </div>
-              <div>
-                <strong>{news.length}</strong>
-                <span>每日资讯</span>
-              </div>
-            </div>
-            <div className="directory-channels">
-              {categories.slice(0, 8).map((item) => (
-                <button key={item.id} type="button" onClick={() => scrollToCategory(item.id)}>
-                  <span>{item.icon || item.name.slice(0, 1)}</span>
-                  {item.name}
-                </button>
-              ))}
-            </div>
-          </SpotlightCard>
-        </section>
-
-        <section className="control-strip">
-          <div className="segment">
-            {[
-              ["featured", "推荐"],
-              ["new", "最新"],
-              ["popular", "热门"],
-            ].map(([id, label]) => (
-              <button key={id} className={sort === id ? "active" : ""} type="button" onClick={() => setSort(id)}>
-                {label}
-              </button>
-            ))}
+      {query.trim() ? (
+        <ToolSection id="search-results" title="搜索结果" subtitle={`匹配 ${sortedTools.length} 个工具`} tools={sortedTools.slice(0, 120)} categories={categories} />
+      ) : (
+        <>
+          <div id="tools-index" className="home-feature-grid scroll-anchor">
+            <ToolSection title="热门工具" subtitle="近期更常被推荐和使用的 AI 工具" tools={featuredTools} categories={categories} moreHref="/category/featured" />
+            <ToolSection title="最新收录" subtitle="新加入工具库的产品和项目" tools={latestTools} categories={categories} moreHref="/category/latest" />
           </div>
-          <p>{loading ? "正在接收工具信号..." : `显示 ${query.trim() ? sortedTools.length : tools.length} / ${tools.length} 个工具`}</p>
-        </section>
+          {homeSections.map((item) => (
+            <ToolSection
+              key={item.id}
+              id={sectionId(item.id)}
+              title={item.name}
+              subtitle={`收录 ${tools.filter((tool) => tool.category === item.id).length} 个相关工具`}
+              tools={sortedTools.filter((tool) => tool.category === item.id)}
+              categories={categories}
+              moreHref={categoryHref(item.id)}
+            />
+          ))}
+        </>
+      )}
 
-        {query.trim() ? (
-          <ToolSection id="search-results" title="搜索结果" subtitle={`匹配 ${sortedTools.length} 个工具`} tools={sortedTools.slice(0, 80)} categories={categories} />
-        ) : (
-          <>
-            <div id="tools-index" className="home-feature-grid scroll-anchor">
-              <ToolSection title="热门工具" subtitle="近期更常被推荐和使用的 AI 工具" tools={featuredTools} categories={categories} />
-              <ToolSection title="最新收录" subtitle="新加入工具库的产品和项目" tools={latestTools} categories={categories} compact />
-            </div>
-            {homeSections.map((item) => (
-              <ToolSection
-                key={item.id}
-                id={sectionId(item.id)}
-                title={item.name}
-                subtitle={`收录 ${tools.filter((tool) => tool.category === item.id).length} 个相关工具`}
-                tools={sortedTools.filter((tool) => tool.category === item.id)}
-                categories={categories}
-              />
-            ))}
-          </>
-        )}
-
-        <section id="daily" className="briefing">
-          <div className="section-title">
-            <div>
-              <p className="eyebrow">daily pulse</p>
-              <h2>每日 AI 资讯</h2>
-            </div>
-            <div className="segment">
-              {["all", "资讯", "项目", "教程"].map((item) => (
-                <button key={item} className={newsFilter === item ? "active" : ""} type="button" onClick={() => setNewsFilter(item)}>
-                  {item === "all" ? "全部" : item}
-                </button>
-              ))}
-            </div>
+      <section id="daily" className="briefing">
+        <div className="section-title">
+          <div>
+            <p className="eyebrow">daily pulse</p>
+            <h2>每日 AI 资讯</h2>
           </div>
-          <div className="news-lanes">
-            {filteredNews.map((item) => (
-              <SpotlightCard className="news-tile" key={item.id || item.title}>
-                <time>{item.publishedAt || "今日"}</time>
-                <div>
-                  <strong>{item.title}</strong>
-                  <p>{item.summary}</p>
-                </div>
-                <span>{item.kind || "资讯"}</span>
-              </SpotlightCard>
-            ))}
-          </div>
-        </section>
-      </main>
-    </div>
+          <a className="section-more" href="/daily-ai-news/">查看更多 &gt;&gt;</a>
+        </div>
+        <div className="news-filter">
+          {["all", "资讯", "项目", "教程"].map((item) => (
+            <button key={item} className={newsFilter === item ? "active" : ""} type="button" onClick={() => setNewsFilter(item)}>
+              {item === "all" ? "全部" : item}
+            </button>
+          ))}
+        </div>
+        <div className="news-lanes">
+          {filteredNews.slice(0, 8).map((item) => (
+            <SpotlightCard className="news-tile" key={item.id || item.title} as="a" href="/daily-ai-news/">
+              <time>{item.publishedAt || "今日"}</time>
+              <div>
+                <strong>{item.title}</strong>
+                <p>{item.summary}</p>
+              </div>
+              <span>{item.kind || "资讯"}</span>
+            </SpotlightCard>
+          ))}
+        </div>
+      </section>
+    </FrontShell>
   );
 }
 
-function ToolSection({ id, title, subtitle, tools, categories, compact = false }) {
-  if (!tools.length) return null;
+function PortalStrip() {
   return (
-    <section id={id} className={`tool-section ${compact ? "compact-section" : ""} scroll-anchor`}>
+    <section className="portal-strip" aria-label="资讯入口">
+      <div className="portal-tabs">
+        {["AI快讯", "AI项目", "AI百科"].map((item, index) => (
+          <button className={index === 0 ? "active" : ""} type="button" key={item}>
+            <span>{index + 1}</span>
+            {item}
+          </button>
+        ))}
+      </div>
+      <div className="portal-cards">
+        <FeatureTile href="/daily-ai-news/" tone="blue" icon="NEWS" title="每日 AI 快讯" subtitle="工具更新、模型动态、行业热闻" />
+        <FeatureTile href="/daily-ai-news/" tone="green" icon="AI" title="免费 AI 社群" subtitle="交流工具经验和使用案例" />
+        <FeatureTile href="/category/latest" tone="violet" icon="NEW" title="最新 AI 项目" subtitle="新产品、开源项目和上线动态" />
+        <FeatureTile href="/category/learning" tone="sky" icon="EDU" title="热门 AI 教程" subtitle="高频教程、提示词和实战资料" />
+        <FeatureTile href="/category/video" tone="dark" icon="2.0" title="Seedance 2.0 上线" subtitle="视频生成能力更新" />
+      </div>
+    </section>
+  );
+}
+
+function FeatureTile({ tone, title, subtitle, href, icon }) {
+  return (
+    <a className={`feature-tile ${tone}`} href={href || "#"}>
+      <span className="feature-icon" aria-hidden="true">{icon}</span>
+      <strong>{title}</strong>
+      <em>{subtitle}</em>
+    </a>
+  );
+}
+
+function CategoryPage({ categoryId }) {
+  const { tools, categories, loading } = useData(false);
+  const [query, setQuery] = useState("");
+  const decodedId = decodeURIComponent(categoryId || "all");
+  const category = categories.find((item) => item.id === decodedId);
+
+  const pageTools = useMemo(() => {
+    if (decodedId === "all") return tools;
+    if (decodedId === "latest") return tools.filter((tool) => tool.isNew);
+    if (decodedId === "featured") return tools.filter((tool) => tool.featured);
+    return tools.filter((tool) => tool.category === decodedId);
+  }, [decodedId, tools]);
+
+  const shownTools = useMemo(() => sortAndFilterTools(pageTools, categories, query, decodedId === "latest" ? "new" : "featured"), [pageTools, categories, query, decodedId]);
+  const title = decodedId === "latest" ? "最新收录" : decodedId === "featured" ? "热门工具" : category?.name || "全部工具";
+  const subtitle = loading ? "正在加载工具数据..." : `共收录 ${shownTools.length} 个工具，点击卡片可直接访问目标网站。`;
+
+  return (
+    <FrontShell tools={tools} categories={categories} activeSection={category?.id || decodedId} query={query} setQuery={setQuery}>
+      <section className="archive-head">
+        <div className="breadcrumb">
+          <a href="/">首页</a>
+          <span>·</span>
+          <span>AI工具集</span>
+          <span>·</span>
+          <strong>{title}</strong>
+        </div>
+        <div className="archive-title">
+          <div>
+            <p className="eyebrow">directory archive</p>
+            <h1>{title}</h1>
+            <p>{subtitle}</p>
+          </div>
+          <a className="archive-back" href="/">返回首页</a>
+        </div>
+      </section>
+
+      <ToolSection title={title} subtitle={subtitle} tools={shownTools} categories={categories} />
+    </FrontShell>
+  );
+}
+
+function DailyNewsPage() {
+  const { tools, categories, news } = useData(false);
+  const [query, setQuery] = useState("");
+  const publishedNews = news.filter((item) => item.status !== "draft");
+  const article = publishedNews.find((item) => item.title?.includes("每日AI快讯")) || publishedNews[0] || fallbackNews[0];
+  const timelineItems = publishedNews.filter((item) => item.id !== article.id && item.title !== article.title);
+  const dailyItems = timelineItems.length >= 3 ? timelineItems : fallbackNews;
+  const grouped = groupNewsByDate(dailyItems);
+  const hotTools = tools.filter((tool) => tool.featured).slice(0, 10);
+  const latestTools = tools.filter((tool) => tool.isNew).slice(0, 8);
+
+  return (
+    <FrontShell tools={tools} categories={categories} activeSection="daily" query={query} setQuery={setQuery} hero={false}>
+      <section className="daily-layout">
+        <article className="daily-article">
+          <div className="breadcrumb">
+            <a href="/">首页</a>
+            <span>·</span>
+            <a href="/daily-ai-news/">AI快讯</a>
+            <span>·</span>
+            <strong>每日AI快讯热闻</strong>
+          </div>
+
+          <div className="daily-card">
+            <header className="daily-header">
+              <h1>每日AI快讯热闻</h1>
+              <div className="daily-meta">
+                <span>AI快讯</span>
+                <span>{article.updatedLabel || "2小时前更新"}</span>
+                <span>{article.author || "AI小集"}</span>
+                <span>{article.comments || 75}</span>
+                <span>{article.likes || 1585}</span>
+              </div>
+            </header>
+
+            {article.coverImage ? (
+              <img className="daily-cover-img" src={article.coverImage} alt="每日AI快讯" />
+            ) : (
+              <div className="daily-cover">
+                <div className="daily-paper" aria-hidden="true">
+                  <span>NEWS</span>
+                  <i />
+                  <i />
+                  <i />
+                </div>
+                <div className="daily-signal" aria-hidden="true" />
+                <strong>每日AI快讯</strong>
+                <small>AI行业资讯 / 热点 / 融资 / 产品动态</small>
+              </div>
+            )}
+
+            <p className="daily-intro">
+              {article.summary ||
+                "AI工具集每个工作日实时更新 AI 行业的最新资讯、新闻、热点、融资、产品动态、爆料等，让你随时了解人工智能领域最新趋势、更新突破和热门大事件。"}
+            </p>
+
+            <div className="timeline">
+              {grouped.map((group) => (
+                <section className="timeline-day" key={group.label}>
+                  <h2>{group.label}</h2>
+                  {group.items.map((item) => (
+                    <NewsArticleItem key={item.id || item.title} item={item} />
+                  ))}
+                </section>
+              ))}
+            </div>
+          </div>
+        </article>
+
+        <aside className="daily-sidebar">
+          <a className="side-ad dark-ad" href="/category/code">
+            <strong>TRAE</strong>
+            <span>字节旗下 AI 代码助手，编程更高效</span>
+          </a>
+          <a className="side-ad blue-ad" href="/category/office">
+            <strong>iTab新标签页</strong>
+            <span>重新定义你的浏览器体验</span>
+          </a>
+          <MiniToolPanel title="热门工具" tools={hotTools} categories={categories} />
+          <MiniToolPanel title="最新收录" tools={latestTools} categories={categories} />
+          <section className="mini-panel">
+            <h3>最新文章</h3>
+            <div className="mini-articles">
+              {publishedNews.slice(0, 5).map((item) => (
+                <a key={item.id || item.title} href={item.sourceUrl || "/daily-ai-news/"}>
+                  <strong>{item.title}</strong>
+                  <span>{item.publishedAt || "今日"} · {item.kind || "资讯"}</span>
+                </a>
+              ))}
+            </div>
+          </section>
+        </aside>
+      </section>
+    </FrontShell>
+  );
+}
+
+function groupNewsByDate(items) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const label = item.dayLabel || formatDateLabel(item.publishedAt);
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(item);
+  });
+  return Array.from(groups, ([label, groupItems]) => ({ label, items: groupItems }));
+}
+
+function formatDateLabel(value) {
+  if (!value) return "今日";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  return `${date.getMonth() + 1}月${date.getDate()}·${weekdays[date.getDay()]}`;
+}
+
+function NewsArticleItem({ item }) {
+  const content = (
+    <>
+      <h3>{item.title}</h3>
+      <p>{item.summary}</p>
+      <span>来源：{item.sourceName || item.kind || "AI工具集"}</span>
+    </>
+  );
+  return item.sourceUrl ? (
+    <a className="timeline-item" href={item.sourceUrl} target="_blank" rel="noreferrer">
+      {content}
+    </a>
+  ) : (
+    <div className="timeline-item">{content}</div>
+  );
+}
+
+function MiniToolPanel({ title, tools, categories }) {
+  return (
+    <section className="mini-panel">
+      <h3>{title}</h3>
+      <div className="mini-tool-grid">
+        {tools.map((tool) => (
+          <a key={`${title}-${tool.id}`} href={tool.url || tool.detailUrl || "#"} target="_blank" rel="noreferrer">
+            <Logo tool={tool} size="small" />
+            <span>{tool.name}</span>
+            <small>{categoryName(categories, tool.category)}</small>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ToolSection({ id, title, subtitle, tools, categories, moreHref }) {
+  if (!tools.length) return null;
+  const inlineLimit = 24;
+  const visibleTools = moreHref ? tools.slice(0, inlineLimit) : tools;
+  const showMore = Boolean(moreHref && tools.length > visibleTools.length);
+  return (
+    <section id={id} className="tool-section scroll-anchor">
       <div className="section-title">
         <div>
           <p className="eyebrow">directory</p>
           <h2>{title}</h2>
           <p>{subtitle}</p>
         </div>
-        <span className="section-more">{tools.length} 项</span>
+        {showMore ? <a className="section-more" href={moreHref}>查看更多 &gt;&gt;</a> : <span className="section-more">{tools.length} 项</span>}
       </div>
-      <div className={`tool-matrix ${compact ? "compact-matrix" : ""}`}>
-        {tools.map((tool) => (
+      <div className="tool-matrix">
+        {visibleTools.map((tool) => (
           <ToolCard key={`${title}-${tool.id}-${tool.name}`} tool={tool} category={categoryName(categories, tool.category)} />
         ))}
       </div>
@@ -464,7 +822,7 @@ function AdminPage() {
   }
 
   const shownTools = tools.filter((tool) => [tool.name, tool.summary, categoryName(categories, tool.category)].join(" ").toLowerCase().includes(toolQuery.toLowerCase()));
-  const shownNews = news.filter((item) => [item.title, item.summary, item.kind].join(" ").toLowerCase().includes(newsQuery.toLowerCase()));
+  const shownNews = news.filter((item) => [item.title, item.summary, item.kind, item.sourceName].join(" ").toLowerCase().includes(newsQuery.toLowerCase()));
 
   if (loading) return <main className="loading-screen">正在打开后台...</main>;
 
@@ -491,14 +849,41 @@ function AdminPage() {
         <header className="admin-top">
           <div>
             <p className="eyebrow">admin console</p>
-            <h1>维护 AI 工具和每日资讯</h1>
+            <h1>内容运营后台</h1>
+            <p>维护工具库、Logo、分类、推荐状态和每日 AI 快讯内容。</p>
           </div>
-          <span>{tools.length} 工具 / {news.length} 资讯</span>
+          <span>PostgreSQL · {tools.length} 工具 / {news.length} 资讯</span>
         </header>
+
+        <section className="admin-metrics" aria-label="后台概览">
+          <div>
+            <span>工具总数</span>
+            <strong>{tools.length}</strong>
+            <small>已发布 {tools.filter((tool) => tool.status !== "draft").length}</small>
+          </div>
+          <div>
+            <span>最新收录</span>
+            <strong>{tools.filter((tool) => tool.isNew).length}</strong>
+            <small>首页自动展示前 4 行</small>
+          </div>
+          <div>
+            <span>推荐工具</span>
+            <strong>{tools.filter((tool) => tool.featured).length}</strong>
+            <small>用于热门模块与侧栏</small>
+          </div>
+          <div>
+            <span>每日资讯</span>
+            <strong>{news.length}</strong>
+            <small>草稿 {news.filter((item) => item.status === "draft").length}</small>
+          </div>
+        </section>
 
         <section className="admin-grid">
           <SpotlightCard className="editor-panel" as="section">
-            <h2>{toolForm.id ? `编辑工具：${toolForm.name}` : "新增工具"}</h2>
+            <div className="editor-heading">
+              <span>Tool editor</span>
+              <h2>{toolForm.id ? `编辑工具：${toolForm.name}` : "新增工具"}</h2>
+            </div>
             <form className="console-form" onSubmit={saveTool}>
               <label>工具名称<input value={toolForm.name} onChange={(e) => updateTool("name", e.target.value)} required /></label>
               <label>官网链接<input value={toolForm.url} onChange={(e) => updateTool("url", e.target.value)} required /></label>
@@ -518,7 +903,7 @@ function AdminPage() {
           </SpotlightCard>
 
           <SpotlightCard className="list-panel" as="section">
-            <div className="panel-head"><h2>工具库</h2><input value={toolQuery} onChange={(e) => setToolQuery(e.target.value)} placeholder="搜索工具" /></div>
+            <div className="panel-head"><div><span>Library</span><h2>工具库</h2></div><input value={toolQuery} onChange={(e) => setToolQuery(e.target.value)} placeholder="搜索工具、分类或简介" /></div>
             <div className="admin-list">
               {shownTools.slice(0, 160).map((tool) => (
                 <AdminRow key={tool.id} item={tool} meta={`${categoryName(categories, tool.category)} · ${tool.status || "published"}`} onEdit={() => setToolForm({ ...tool, tags: (tool.tags || []).join(", "), featured: String(Boolean(tool.featured)), isNew: String(Boolean(tool.isNew)) })} onDelete={() => remove("tools", tool.id)} />
@@ -529,25 +914,36 @@ function AdminPage() {
 
         <section className="admin-grid">
           <SpotlightCard className="editor-panel" as="section">
-            <h2>{newsForm.id ? `编辑资讯：${newsForm.title}` : "新增每日资讯"}</h2>
+            <div className="editor-heading">
+              <span>Daily news</span>
+              <h2>{newsForm.id ? `编辑资讯：${newsForm.title}` : "新增每日资讯"}</h2>
+            </div>
             <form className="console-form" onSubmit={saveNews}>
               <label>标题<input value={newsForm.title} onChange={(e) => updateNews("title", e.target.value)} required /></label>
               <div className="form-pair">
                 <label>类型<select value={newsForm.kind} onChange={(e) => updateNews("kind", e.target.value)}><option value="资讯">资讯</option><option value="项目">项目</option><option value="教程">教程</option><option value="模型">模型</option></select></label>
                 <label>日期<input type="date" value={newsForm.publishedAt} onChange={(e) => updateNews("publishedAt", e.target.value)} /></label>
               </div>
-              <label>来源链接<input value={newsForm.sourceUrl} onChange={(e) => updateNews("sourceUrl", e.target.value)} /></label>
-              <label>摘要<textarea value={newsForm.summary} onChange={(e) => updateNews("summary", e.target.value)} rows="4" /></label>
+              <div className="form-pair">
+                <label>来源名称<input value={newsForm.sourceName} onChange={(e) => updateNews("sourceName", e.target.value)} placeholder="机器之心 / AI工具集" /></label>
+                <label>来源链接<input value={newsForm.sourceUrl} onChange={(e) => updateNews("sourceUrl", e.target.value)} /></label>
+              </div>
+              <label>封面图地址<input value={newsForm.coverImage} onChange={(e) => updateNews("coverImage", e.target.value)} placeholder="用于每日快讯页头图，可留空" /></label>
+              <label>摘要 / 正文<textarea value={newsForm.summary} onChange={(e) => updateNews("summary", e.target.value)} rows="4" /></label>
+              <div className="form-pair">
+                <label>评论数<input type="number" value={newsForm.comments} onChange={(e) => updateNews("comments", e.target.value)} /></label>
+                <label>点赞数<input type="number" value={newsForm.likes} onChange={(e) => updateNews("likes", e.target.value)} /></label>
+              </div>
               <label>状态<select value={newsForm.status} onChange={(e) => updateNews("status", e.target.value)}><option value="published">发布</option><option value="draft">草稿</option></select></label>
               <div className="form-actions"><button type="submit">保存资讯</button><button type="button" onClick={() => setNewsForm(emptyNews())}>清空</button></div>
             </form>
           </SpotlightCard>
 
           <SpotlightCard className="list-panel" as="section">
-            <div className="panel-head"><h2>每日资讯</h2><input value={newsQuery} onChange={(e) => setNewsQuery(e.target.value)} placeholder="搜索资讯" /></div>
+            <div className="panel-head"><div><span>Briefing</span><h2>每日资讯</h2></div><input value={newsQuery} onChange={(e) => setNewsQuery(e.target.value)} placeholder="搜索标题、来源或类型" /></div>
             <div className="admin-list">
               {shownNews.map((item) => (
-                <AdminRow key={item.id} item={{ ...item, name: item.title }} meta={`${item.publishedAt || "未定日期"} · ${item.kind || "资讯"} · ${item.status || "published"}`} onEdit={() => setNewsForm(item)} onDelete={() => remove("news", item.id)} />
+                <AdminRow key={item.id} item={{ ...item, name: item.title }} meta={`${item.publishedAt || "未定日期"} · ${item.kind || "资讯"} · ${item.status || "published"}`} onEdit={() => setNewsForm({ ...emptyNews(), ...item })} onDelete={() => remove("news", item.id)} />
               ))}
             </div>
           </SpotlightCard>
@@ -573,13 +969,27 @@ function emptyTool() {
 }
 
 function emptyNews() {
-  return { id: "", title: "", kind: "资讯", publishedAt: new Date().toISOString().slice(0, 10), sourceUrl: "", summary: "", status: "published" };
+  return {
+    id: "",
+    title: "",
+    kind: "资讯",
+    publishedAt: new Date().toISOString().slice(0, 10),
+    sourceName: "",
+    sourceUrl: "",
+    coverImage: "",
+    summary: "",
+    comments: 0,
+    likes: 0,
+    status: "published",
+  };
 }
 
 function App() {
   const path = window.location.pathname;
   if (path.startsWith("/admin")) return <AdminPage />;
   if (path.startsWith("/login")) return <LoginPage />;
+  if (path.startsWith("/daily-ai-news")) return <DailyNewsPage />;
+  if (path.startsWith("/category/")) return <CategoryPage categoryId={path.split("/category/")[1]?.replace(/\/$/, "")} />;
   return <HomePage />;
 }
 

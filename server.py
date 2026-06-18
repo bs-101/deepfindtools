@@ -437,9 +437,11 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main():
+    host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "4173"))
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"DeepFind Tools running at http://127.0.0.1:{port}/ using {STORE.name}")
+    server = ThreadingHTTPServer((host, port), Handler)
+    display_host = "127.0.0.1" if host == "0.0.0.0" else host
+    print(f"DeepFind Tools running at http://{display_host}:{port}/ using {STORE.name}")
     server.serve_forever()
 
 

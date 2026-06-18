@@ -4,3 +4,5 @@ output/
 node_modules/
 .npm-cache/
 .tools/
+qa-*.png
+.playwright-cli/
