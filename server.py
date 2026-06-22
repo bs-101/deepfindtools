@@ -502,8 +502,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
 
-        if parsed.path in ["/admin", "/admin/"] and not self.is_logged_in():
-            return self.redirect("/login")
+        if (parsed.path == "/admin" or parsed.path.startswith("/admin/")) and not self.is_logged_in():
+            return self.send_json({"error": "Not found"}, 404)
         if parsed.path in ["/login", "/login/"] and self.is_logged_in():
             return self.redirect("/admin")
 

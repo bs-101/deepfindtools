@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+.env
 output/
 node_modules/
 .npm-cache/
