@@ -434,10 +434,31 @@ def sanitize_external_url(value):
     parsed = urlparse(value)
     if "ai-bot.cn" in parsed.netloc.lower():
         return ""
+    tracking_keys = {
+        "aibot",
+        "ai_bot",
+        "campaign",
+        "channel",
+        "from",
+        "invite",
+        "invite_code",
+        "invitecode",
+        "invitation",
+        "medium",
+        "ref",
+        "refer",
+        "referrer",
+        "referrer_s",
+        "source",
+        "spm",
+    }
     kept = []
     for key, val in parse_qsl(parsed.query, keep_blank_values=True):
+        key_lower = key.lower()
         marker = f"{key}={val}".lower()
-        if key.lower().startswith("utm_"):
+        if key_lower.startswith("utm_"):
+            continue
+        if key_lower in tracking_keys:
             continue
         if "ai-bot" in marker or "aibot" in marker:
             continue
