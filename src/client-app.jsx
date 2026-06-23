@@ -1,6 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createRoot } from "react-dom/client";
-import "./styles.css";
 
 const api = {
   async get(path) {
@@ -113,8 +111,8 @@ const fallbackNews = [
   },
 ];
 
-function useData(includeDrafts = false) {
-  const [data, setData] = useState({ tools: [], categories: [], news: [], loading: true });
+function useData(includeDrafts = false, initialData = null) {
+  const [data, setData] = useState(() => initialData ? { tools: initialData.tools || [], categories: initialData.categories || [], news: initialData.news || [], loading: false } : { tools: [], categories: [], news: [], loading: true });
 
   async function load() {
     try {
@@ -485,8 +483,8 @@ function HeroSearch({ query, setQuery }) {
   );
 }
 
-function HomePage() {
-  const { tools, categories, news, loading } = useData(false);
+function HomePage({ initialData = null } = {}) {
+  const { tools, categories, news, loading } = useData(false, initialData);
   const [activeSection, setActiveSection] = useState("all");
   const [sort, setSort] = useState("featured");
   const [query, setQuery] = useState("");
@@ -622,8 +620,8 @@ function FeatureTile({ tone, title, subtitle, href, icon }) {
   );
 }
 
-function CategoryPage({ categoryId }) {
-  const { tools, categories, loading } = useData(false);
+function CategoryPage({ categoryId, initialData = null }) {
+  const { tools, categories, loading } = useData(false, initialData);
   const [query, setQuery] = useState("");
   const decodedId = decodeURIComponent(categoryId || "all");
   const category = categories.find((item) => item.id === decodedId);
@@ -664,8 +662,8 @@ function CategoryPage({ categoryId }) {
   );
 }
 
-function DailyNewsPage() {
-  const { tools, categories, news } = useData(false);
+function DailyNewsPage({ initialData = null } = {}) {
+  const { tools, categories, news } = useData(false, initialData);
   const [query, setQuery] = useState("");
   const publishedNews = news.filter((item) => item.status !== "draft");
   const introArticle = publishedNews.find((item) => item.title?.includes("每日AI快讯"));
@@ -862,8 +860,8 @@ function ToolCard({ tool, category }) {
   );
 }
 
-function ToolDetailPage({ toolId }) {
-  const { tools, categories, loading } = useData(false);
+function ToolDetailPage({ toolId, initialData = null }) {
+  const { tools, categories, loading } = useData(false, initialData);
   const [query, setQuery] = useState("");
   const decodedId = decodeURIComponent(toolId || "");
   const tool = tools.find((item) => String(item.id) === decodedId);
@@ -1227,4 +1225,5 @@ function App() {
   return <HomePage />;
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+export { HomePage, CategoryPage, DailyNewsPage, ToolDetailPage, LoginPage, AdminPage };
+export default App;

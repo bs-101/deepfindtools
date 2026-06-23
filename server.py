@@ -438,19 +438,35 @@ def sanitize_external_url(value):
         "aibot",
         "ai_bot",
         "campaign",
+        "cgv",
         "channel",
+        "channelid",
+        "fromid",
         "from",
+        "ic",
         "invite",
         "invite_code",
+        "invite_ref",
         "invitecode",
+        "invitesource",
+        "invitationcode",
         "invitation",
         "medium",
+        "pic",
         "ref",
         "refer",
+        "referral",
         "referrer",
         "referrer_s",
+        "share_token",
+        "sid",
         "source",
+        "sourceid",
+        "souceid",
         "spm",
+        "track",
+        "utm",
+        "usercode",
     }
     kept = []
     for key, val in parse_qsl(parsed.query, keep_blank_values=True):
@@ -463,7 +479,11 @@ def sanitize_external_url(value):
         if "ai-bot" in marker or "aibot" in marker:
             continue
         kept.append((key, val))
-    return urlunparse(parsed._replace(query=urlencode(kept, doseq=True)))
+    fragment = parsed.fragment
+    fragment_marker = fragment.lower()
+    if "ai-bot" in fragment_marker or "aibot" in fragment_marker or any(key in fragment_marker for key in tracking_keys):
+        fragment = ""
+    return urlunparse(parsed._replace(query=urlencode(kept, doseq=True), fragment=fragment))
 
 
 def public_tool(tool):
@@ -481,6 +501,19 @@ def public_tool(tool):
 
 def public_tools(tools):
     return [public_tool(tool) for tool in tools]
+
+
+def public_news_item(item):
+    news = dict(item)
+    if news.get("sourceUrl"):
+        news["sourceUrl"] = sanitize_external_url(news.get("sourceUrl") or "")
+    if news.get("coverImage") and is_remote_url(news.get("coverImage")):
+        news["coverImage"] = sanitize_external_url(news.get("coverImage") or "")
+    return news
+
+
+def public_news(items):
+    return [public_news_item(item) for item in items]
 
 
 def find_tool(tool_id, include_drafts=False):
@@ -748,7 +781,8 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/categories":
             return self.send_json(STORE.categories())
         if parsed.path == "/api/news":
-            return self.send_json(STORE.news(include_drafts=include_drafts))
+            news = STORE.news(include_drafts=include_drafts)
+            return self.send_json(news if include_drafts else public_news(news))
         if parsed.path == "/api/meta":
             return self.send_json({"store": STORE.name, "adminUser": ADMIN_USER})
         if parsed.path == "/api/session":

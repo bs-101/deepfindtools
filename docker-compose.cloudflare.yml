@@ -20,9 +20,11 @@ services:
       timeout: 5s
       retries: 30
 
-  app:
-    build: .
-    container_name: deepfindtools-local-app
+  backend:
+    build:
+      context: .
+      target: backend
+    container_name: deepfindtools-local-backend
     restart: unless-stopped
     depends_on:
       mysql:
@@ -44,12 +46,30 @@ services:
     volumes:
       - logo_cache:/app/data/logo-cache
 
+  frontend:
+    build:
+      context: .
+      target: frontend
+      args:
+        PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://ai.deepfindtools.com}
+    container_name: deepfindtools-local-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      API_INTERNAL_URL: http://backend:4173
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://ai.deepfindtools.com}
+      PORT: 3000
+    expose:
+      - "3000"
+
   nginx:
     image: nginx:1.27-alpine
     container_name: deepfindtools-local-nginx
     restart: unless-stopped
     depends_on:
-      - app
+      - frontend
+      - backend
     ports:
       - "127.0.0.1:${LOCAL_NGINX_PORT:-8080}:80"
     volumes:

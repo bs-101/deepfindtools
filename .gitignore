@@ -4,6 +4,7 @@ __pycache__/
 data/logo-cache/
 output/
 node_modules/
+.next/
 .npm-cache/
 .tools/
 qa-*.png
