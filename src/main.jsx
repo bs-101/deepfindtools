@@ -323,6 +323,14 @@ function sortAndFilterTools(tools, categories, query, sort = "featured") {
     });
 }
 
+function toolDetailHref(tool) {
+  return tool?.detailUrl || (tool?.id ? `/sites/${encodeURIComponent(tool.id)}.html` : tool?.url || "#");
+}
+
+function officialToolUrl(tool) {
+  return tool?.officialUrl || tool?.url || "#";
+}
+
 function Logo({ tool, size = "normal" }) {
   const [failed, setFailed] = useState(false);
   const hasLogo = Boolean(tool?.logo && !failed);
@@ -795,7 +803,7 @@ function MiniToolPanel({ title, tools, categories }) {
       <h3>{title}</h3>
       <div className="mini-tool-grid">
         {tools.map((tool) => (
-          <a key={`${title}-${tool.id}`} href={tool.url || tool.detailUrl || "#"} target="_blank" rel="noreferrer">
+          <a key={`${title}-${tool.id}`} href={toolDetailHref(tool)}>
             <Logo tool={tool} size="small" />
             <span>{tool.name}</span>
             <small>{categoryName(categories, tool.category)}</small>
@@ -831,9 +839,9 @@ function ToolSection({ id, title, subtitle, tools, categories, moreHref }) {
 }
 
 function ToolCard({ tool, category }) {
-  const href = tool.url || tool.detailUrl || "#";
+  const href = toolDetailHref(tool);
   return (
-    <SpotlightCard className="tool-tile" as="a" href={href} target="_blank" rel="noreferrer" aria-label={`打开 ${tool.name}`}>
+    <SpotlightCard className="tool-tile" as="a" href={href} aria-label={`查看 ${tool.name} 详情`}>
       <div className="tool-head">
         <Logo tool={tool} />
         <div>
@@ -851,6 +859,89 @@ function ToolCard({ tool, category }) {
         <span>{tool.isNew ? "新收录" : tool.featured ? "热门" : "收录"}</span>
       </div>
     </SpotlightCard>
+  );
+}
+
+function ToolDetailPage({ toolId }) {
+  const { tools, categories, loading } = useData(false);
+  const [query, setQuery] = useState("");
+  const decodedId = decodeURIComponent(toolId || "");
+  const tool = tools.find((item) => String(item.id) === decodedId);
+  const category = tool ? categoryName(categories, tool.category) : "AI工具";
+  const relatedTools = tool ? tools.filter((item) => item.category === tool.category && String(item.id) !== String(tool.id)).slice(0, 8) : [];
+  const officialUrl = tool ? officialToolUrl(tool) : "#";
+
+  useEffect(() => {
+    if (tool?.name) document.title = `${tool.name} - ${category} | DeepFind Tools`;
+  }, [tool?.name, category]);
+
+  if (loading && !tool) {
+    return (
+      <FrontShell tools={tools} categories={categories} activeSection="all" query={query} setQuery={setQuery} hero={false}>
+        <section className="detail-shell"><p className="eyebrow">loading</p><h1>正在加载工具详情...</h1></section>
+      </FrontShell>
+    );
+  }
+
+  if (!tool) {
+    return (
+      <FrontShell tools={tools} categories={categories} activeSection="all" query={query} setQuery={setQuery} hero={false}>
+        <section className="detail-shell"><p className="eyebrow">not found</p><h1>工具不存在或已下架</h1><a className="archive-back" href="/">返回首页</a></section>
+      </FrontShell>
+    );
+  }
+
+  return (
+    <FrontShell tools={tools} categories={categories} activeSection={tool.category} query={query} setQuery={setQuery} hero={false}>
+      <article className="tool-detail">
+        <div className="breadcrumb">
+          <a href="/">首页</a>
+          <span>·</span>
+          <a href={`/category/${encodeURIComponent(tool.category)}`}>{category}</a>
+          <span>·</span>
+          <strong>{tool.name}</strong>
+        </div>
+
+        <section className="detail-hero">
+          <div className="detail-logo-panel">
+            <Logo tool={tool} />
+          </div>
+          <div className="detail-copy">
+            <span className="detail-category">{category}</span>
+            <h1>{tool.name}</h1>
+            <p>{tool.summary || `${tool.name} 是 DeepFind Tools 收录的 ${category}，可用于提升 AI 工作流效率。`}</p>
+            <div className="detail-tags">
+              {(tool.tags || [category]).slice(0, 6).map((tag) => <span key={tag}>{tag}</span>)}
+            </div>
+            <div className="detail-actions">
+              {officialUrl && officialUrl !== "#" ? <a className="primary-link" href={officialUrl} target="_blank" rel="nofollow sponsored noopener noreferrer">访问官网</a> : null}
+              <a className="secondary-link" href={`/category/${encodeURIComponent(tool.category)}`}>查看同类工具</a>
+            </div>
+          </div>
+        </section>
+
+        <section className="detail-content">
+          <div className="detail-main">
+            <h2>{tool.name} 是什么？</h2>
+            <p>{tool.summary || `${tool.name} 是一款 ${category}，适合需要 AI 辅助创作、办公、开发或学习的用户。`}</p>
+            <h2>{tool.name} 适合谁使用？</h2>
+            <p>适合正在寻找 {category} 的个人用户、创作者、设计师、运营、开发者和团队。你可以先在本站了解工具定位、标签和相关替代品，再前往官网体验。</p>
+            <h2>收录说明</h2>
+            <p>DeepFind Tools 会持续整理 AI 工具的分类、简介、官网入口和相关资讯。详情页用于搜索引擎收录和用户决策，官网访问会在新窗口打开。</p>
+          </div>
+          <aside className="detail-side">
+            <h3>工具信息</h3>
+            <dl>
+              <dt>分类</dt><dd>{category}</dd>
+              <dt>状态</dt><dd>{tool.isNew ? "新收录" : tool.featured ? "热门推荐" : "已收录"}</dd>
+              <dt>标签</dt><dd>{(tool.tags || []).slice(0, 3).join(" / ") || category}</dd>
+            </dl>
+          </aside>
+        </section>
+
+        {relatedTools.length ? <ToolSection title="相似 AI 工具" subtitle={`更多 ${category} 可选工具`} tools={relatedTools} categories={categories} /> : null}
+      </article>
+    </FrontShell>
   );
 }
 
@@ -1131,6 +1222,7 @@ function App() {
   if (path.startsWith("/admin")) return <AdminPage />;
   if (path.startsWith("/login")) return <LoginPage />;
   if (path.startsWith("/daily-ai-news")) return <DailyNewsPage />;
+  if (path.startsWith("/sites/")) return <ToolDetailPage toolId={path.split("/sites/")[1]?.replace(/\.html$/i, "").replace(/\/$/, "")} />;
   if (path.startsWith("/category/")) return <CategoryPage categoryId={path.split("/category/")[1]?.replace(/\/$/, "")} />;
   return <HomePage />;
 }

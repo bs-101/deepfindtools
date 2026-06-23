@@ -37,9 +37,13 @@ services:
       DB_HOST: ${DB_HOST:-mysql}
       DB_PORT: ${DB_PORT:-3306}
       ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env before starting}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://www.deepfindtools.com}
     ports:
       - "127.0.0.1:${APP_PORT:-4173}:4173"
+    volumes:
+      - logo_cache:/app/data/logo-cache
 
 volumes:
   mysql_data:
+  logo_cache:

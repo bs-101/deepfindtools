@@ -1,12 +1,15 @@
 from http import cookies
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from html import escape
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse, parse_qsl
+from urllib.request import Request, urlopen
 import hashlib
 import hmac
 import json
 import mimetypes
 import os
+import re
 import secrets
 import shutil
 import time
@@ -27,9 +30,11 @@ DIST_DIR = ROOT / "dist"
 DATA_DIR = ROOT / "data"
 SEED_PATH = DATA_DIR / "seed.json"
 DB_PATH = DATA_DIR / "db.json"
+LOGO_CACHE_DIR = DATA_DIR / "logo-cache"
 
 ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 SESSION_COOKIE = "deepfind_session"
 SESSIONS = set()
 
@@ -413,7 +418,97 @@ STORE = make_store()
 
 
 def password_ok(username, password):
+    if not ADMIN_PASSWORD:
+        return False
     return username == ADMIN_USER and hmac.compare_digest(password or "", ADMIN_PASSWORD)
+
+
+def is_remote_url(value):
+    parsed = urlparse(value or "")
+    return parsed.scheme in ["http", "https"] and bool(parsed.netloc)
+
+
+def sanitize_external_url(value):
+    if not is_remote_url(value):
+        return value or ""
+    parsed = urlparse(value)
+    if "ai-bot.cn" in parsed.netloc.lower():
+        return ""
+    kept = []
+    for key, val in parse_qsl(parsed.query, keep_blank_values=True):
+        marker = f"{key}={val}".lower()
+        if key.lower().startswith("utm_"):
+            continue
+        if "ai-bot" in marker or "aibot" in marker:
+            continue
+        kept.append((key, val))
+    return urlunparse(parsed._replace(query=urlencode(kept, doseq=True)))
+
+
+def public_tool(tool):
+    item = dict(tool)
+    tool_id = str(item.get("id") or "")
+    official_url = sanitize_external_url(item.get("url") or "")
+    item["url"] = official_url
+    item["officialUrl"] = official_url
+    item["detailUrl"] = f"/sites/{tool_id}.html" if tool_id else official_url
+    if item.get("logo"):
+        item["logo"] = f"/api/logo/{tool_id}" if tool_id else item.get("logo")
+    item.pop("logoRemote", None)
+    return item
+
+
+def public_tools(tools):
+    return [public_tool(tool) for tool in tools]
+
+
+def find_tool(tool_id, include_drafts=False):
+    for tool in STORE.tools(include_drafts=include_drafts):
+        if str(tool.get("id")) == str(tool_id):
+            return tool
+    return None
+
+
+def site_base(headers):
+    if PUBLIC_BASE_URL:
+        return PUBLIC_BASE_URL
+    host = headers.get("X-Forwarded-Host") or headers.get("Host") or "localhost:4173"
+    proto = headers.get("X-Forwarded-Proto") or ("https" if host and not host.startswith(("localhost", "127.0.0.1")) else "http")
+    return f"{proto}://{host}".rstrip("/")
+
+
+def html_description(tool):
+    summary = tool.get("summary") or ""
+    category = tool.get("category") or "AI工具"
+    return f"{tool.get('name', 'AI工具')}：{summary or category}。DeepFind Tools 收录的 AI 工具详情、分类、标签和官网入口。"
+
+
+def inject_head(html, title, description, canonical, image="", json_ld=None):
+    title = escape(title)
+    description = escape(description)
+    canonical = escape(canonical)
+    image = escape(image or "")
+    tags = [
+        f"<title>{title}</title>",
+        f'<meta name="description" content="{description}" />',
+        f'<link rel="canonical" href="{canonical}" />',
+        f'<meta property="og:title" content="{title}" />',
+        f'<meta property="og:description" content="{description}" />',
+        f'<meta property="og:url" content="{canonical}" />',
+        '<meta property="og:type" content="website" />',
+        '<meta name="twitter:card" content="summary_large_image" />',
+    ]
+    if image:
+        tags.append(f'<meta property="og:image" content="{image}" />')
+    if json_ld:
+        tags.append(f'<script type="application/ld+json">{json.dumps(json_ld, ensure_ascii=False)}</script>')
+    html = re.sub(r"<title>.*?</title>", "", html, flags=re.I | re.S)
+    html = re.sub(r'<meta name="description" content=".*?"\s*/?>', "", html, flags=re.I | re.S)
+    html = re.sub(r'<link rel="canonical" href=".*?"\s*/?>', "", html, flags=re.I | re.S)
+    html = re.sub(r'<meta property="og:[^"]+" content=".*?"\s*/?>', "", html, flags=re.I | re.S)
+    html = re.sub(r'<meta name="twitter:[^"]+" content=".*?"\s*/?>', "", html, flags=re.I | re.S)
+    html = re.sub(r'<script type="application/ld\+json">.*?</script>', "", html, flags=re.I | re.S)
+    return html.replace("</head>", "\n    " + "\n    ".join(tags) + "\n  </head>")
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -461,6 +556,96 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def serve_html(self, html, status=200):
+        body = html.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def serve_text(self, text, content_type="text/plain; charset=utf-8", status=200):
+        body = text.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def serve_tool_page(self, tool_id):
+        raw_tool = find_tool(tool_id)
+        if not raw_tool:
+            return self.send_json({"error": "Not found"}, 404)
+        tool = public_tool(raw_tool)
+        index_path = DIST_DIR / "index.html" if DIST_DIR.exists() else ROOT / "index.html"
+        base = site_base(self.headers)
+        canonical = f"{base}/sites/{escape(str(tool.get('id')))}.html"
+        logo_url = f"{base}{tool.get('logo')}" if str(tool.get("logo", "")).startswith("/") else tool.get("logo", "")
+        title = f"{tool.get('name')} - {tool.get('summary') or 'AI工具详情'} | DeepFind Tools"
+        description = html_description(tool)
+        json_ld = {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            "name": tool.get("name"),
+            "description": tool.get("summary") or description,
+            "applicationCategory": tool.get("category") or "AIApplication",
+            "url": canonical,
+            "image": logo_url,
+            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "CNY"},
+        }
+        html = index_path.read_text(encoding="utf-8")
+        return self.serve_html(inject_head(html, title, description, canonical, logo_url, json_ld))
+
+    def serve_logo(self, tool_id):
+        raw_tool = find_tool(tool_id, include_drafts=True)
+        if not raw_tool:
+            return self.send_json({"error": "Not found"}, 404)
+        source = raw_tool.get("logoRemote") or raw_tool.get("logo") or ""
+        if not source:
+            return self.send_json({"error": "Logo not found"}, 404)
+        if not is_remote_url(source):
+            path = source.replace("./", "/").lstrip("/")
+            return self.serve_root_file(f"/{path}")
+
+        LOGO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        suffix = Path(urlparse(source).path).suffix.lower()
+        if suffix not in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"]:
+            suffix = ".img"
+        cache_path = LOGO_CACHE_DIR / f"{re.sub(r'[^a-zA-Z0-9_-]', '_', str(tool_id))}{suffix}"
+        if not cache_path.exists():
+            request = Request(source, headers={"User-Agent": "DeepFindTools/1.0"})
+            with urlopen(request, timeout=12) as response:
+                data = response.read(2 * 1024 * 1024 + 1)
+            if len(data) > 2 * 1024 * 1024:
+                return self.send_json({"error": "Logo too large"}, 413)
+            cache_path.write_bytes(data)
+
+        body = cache_path.read_bytes()
+        content_type = mimetypes.guess_type(str(cache_path))[0] or "image/png"
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def serve_robots(self):
+        base = site_base(self.headers)
+        return self.serve_text(f"User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /login\nSitemap: {base}/sitemap.xml\n")
+
+    def serve_sitemap(self):
+        base = site_base(self.headers)
+        urls = [
+            f"{base}/",
+            f"{base}/daily-ai-news/",
+        ]
+        urls.extend(f"{base}/category/{category.get('id')}" for category in STORE.categories())
+        urls.extend(f"{base}/sites/{tool.get('id')}.html" for tool in STORE.tools())
+        body = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+        for url in urls:
+            body.append(f"  <url><loc>{escape(str(url))}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>")
+        body.append("</urlset>")
+        return self.serve_text("\n".join(body), "application/xml; charset=utf-8")
+
     def serve_root_file(self, path):
         target = (ROOT / path.lstrip("/")).resolve()
         if not str(target).startswith(str(ROOT.resolve())) or not target.exists() or not target.is_file():
@@ -507,6 +692,13 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path in ["/login", "/login/"] and self.is_logged_in():
             return self.redirect("/admin")
 
+        if parsed.path == "/robots.txt":
+            return self.serve_robots()
+        if parsed.path == "/sitemap.xml":
+            return self.serve_sitemap()
+        if parsed.path.startswith("/sites/") and parsed.path.endswith(".html"):
+            return self.serve_tool_page(Path(parsed.path).stem)
+
         if not parsed.path.startswith("/api/"):
             target = Path(self.translate_path(parsed.path))
             if target.exists() and target.is_file():
@@ -523,7 +715,15 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         if parsed.path == "/api/tools":
-            return self.send_json(STORE.tools(include_drafts=include_drafts))
+            tools = STORE.tools(include_drafts=include_drafts)
+            return self.send_json(tools if include_drafts else public_tools(tools))
+        if parsed.path.startswith("/api/tools/"):
+            tool = find_tool(parsed.path.rsplit("/", 1)[-1], include_drafts=include_drafts)
+            if not tool:
+                return self.send_json({"error": "Not found"}, 404)
+            return self.send_json(tool if include_drafts else public_tool(tool))
+        if parsed.path.startswith("/api/logo/"):
+            return self.serve_logo(parsed.path.rsplit("/", 1)[-1])
         if parsed.path == "/api/categories":
             return self.send_json(STORE.categories())
         if parsed.path == "/api/news":
