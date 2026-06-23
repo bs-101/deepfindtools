@@ -494,7 +494,9 @@ def public_tool(tool):
     item["officialUrl"] = official_url
     item["detailUrl"] = f"/sites/{tool_id}.html" if tool_id else official_url
     if item.get("logo"):
-        item["logo"] = f"/api/logo/{tool_id}" if tool_id else item.get("logo")
+        logo_source = str(item.get("logoRemote") or item.get("logo") or "")
+        logo_version = hashlib.sha1(logo_source.encode("utf-8")).hexdigest()[:10] if logo_source else "logo"
+        item["logo"] = f"/api/logo/{tool_id}.png?v={logo_version}" if tool_id else item.get("logo")
     item.pop("logoRemote", None)
     return item
 
@@ -575,7 +577,8 @@ class Handler(SimpleHTTPRequestHandler):
     }
 
     def end_headers(self):
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", getattr(self, "_cache_control", "no-store"))
+        self._cache_control = "no-store"
         super().end_headers()
 
     def send_json(self, payload, status=200):
@@ -651,6 +654,7 @@ class Handler(SimpleHTTPRequestHandler):
         return self.serve_html(inject_head(html, title, description, canonical, logo_url, json_ld))
 
     def serve_logo(self, tool_id):
+        tool_id = re.sub(r"\.(png|jpg|jpeg|webp|gif|svg|img)$", "", str(tool_id), flags=re.I)
         raw_tool = find_tool(tool_id, include_drafts=True)
         if not raw_tool:
             return self.send_json({"error": "Not found"}, 404)
@@ -679,6 +683,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        self._cache_control = "public, max-age=604800, stale-while-revalidate=2592000"
         self.end_headers()
         self.wfile.write(body)
 

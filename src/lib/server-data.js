@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createHash } from "node:crypto";
 
 const root = process.cwd();
 const seedPath = path.join(root, "data", "seed.json");
@@ -73,7 +74,11 @@ function publicTool(tool) {
   item.url = officialUrl;
   item.officialUrl = officialUrl;
   item.detailUrl = id ? `/sites/${id}.html` : officialUrl;
-  if (item.logo) item.logo = id ? `/api/logo/${id}` : item.logo;
+  if (item.logo) {
+    const logoSource = String(item.logoRemote || item.logo || "");
+    const logoVersion = logoSource ? createHash("sha1").update(logoSource).digest("hex").slice(0, 10) : "logo";
+    item.logo = id ? `/api/logo/${id}.png?v=${logoVersion}` : item.logo;
+  }
   delete item.logoRemote;
   return item;
 }
