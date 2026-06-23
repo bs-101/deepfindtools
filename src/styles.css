@@ -3490,3 +3490,207 @@ body {
     width: 100%;
   }
 }
+
+/* Brand/icon polish: real SVG mark, tighter app-icon cards, and calmer navigation symbols. */
+.brand-mark,
+.hero-mark {
+  position: relative;
+  overflow: hidden;
+  color: transparent;
+  text-indent: -999px;
+  background:
+    url("/brand-mark.svg") center/cover no-repeat,
+    linear-gradient(135deg, #ffffff, #eef7ff);
+  box-shadow:
+    0 14px 28px rgba(88, 99, 255, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+
+.hero-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+}
+
+.top-nav a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.top-nav a::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  background: url("/nav-tools.svg") center/contain no-repeat;
+}
+
+.top-nav a:nth-child(2)::before {
+  background-image: url("/nav-apps.svg");
+}
+
+.top-nav a:nth-child(3)::before {
+  background-image: url("/nav-news.svg");
+}
+
+.top-nav a:nth-child(4)::before {
+  background-image: url("/nav-new.svg");
+}
+
+.top-nav a:nth-child(5)::before {
+  background-image: url("/nav-edu.svg");
+}
+
+.top-nav a:nth-child(6)::before {
+  background-image: url("/nav-about.svg");
+}
+
+.category-tune {
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.category-tune:hover {
+  transform: translateX(2px);
+}
+
+.category-code {
+  border: 1px solid rgba(111, 104, 255, 0.16);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.95), transparent 46%),
+    linear-gradient(135deg, #f8faff 0%, #eef4ff 100%);
+  color: #5b63ff;
+  box-shadow:
+    0 8px 18px rgba(49, 76, 170, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.category-code::after {
+  right: -8px;
+  bottom: -9px;
+  width: 19px;
+  height: 19px;
+  background: linear-gradient(135deg, rgba(111, 104, 255, 0.18), rgba(34, 211, 238, 0.16));
+}
+
+.category-code svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.15;
+}
+
+.category-tune.active .category-code,
+.category-tune:hover .category-code {
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.3), transparent 42%),
+    linear-gradient(135deg, #8b5cf6 0%, #5568ff 52%, #22d3ee 100%);
+  color: #ffffff;
+  box-shadow:
+    0 12px 24px rgba(86, 104, 255, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.logo-orb {
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  background:
+    radial-gradient(circle at 28% 18%, rgba(255, 255, 255, 0.95), transparent 42%),
+    linear-gradient(135deg, #ffffff, #f3f7ff);
+  box-shadow:
+    0 10px 20px rgba(18, 27, 48, 0.055),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.66);
+}
+
+.logo-orb img {
+  background: transparent;
+  filter: saturate(1.04) contrast(1.03);
+}
+
+.logo-orb.has-logo::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  z-index: 1;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(111, 104, 255, 0.08), rgba(34, 211, 238, 0.06));
+  pointer-events: none;
+}
+
+.tool-tile:hover .logo-orb,
+.admin-row:hover .logo-orb,
+.mini-tool-grid a:hover .logo-orb {
+  border-color: rgba(111, 104, 255, 0.28);
+  box-shadow:
+    0 14px 26px rgba(82, 96, 255, 0.13),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
+.command-bar button {
+  background: url("/icon-search.svg") center/28px 28px no-repeat;
+}
+
+.command-bar button::before,
+.command-bar button::after {
+  display: none;
+}
+
+.feature-icon,
+.hot-pill,
+.section-title h2,
+.section-more {
+  box-shadow:
+    0 10px 22px rgba(82, 96, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.feature-icon {
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  backdrop-filter: blur(10px);
+}
+
+.section-title h2::before,
+.hot-pill::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18);
+}
+
+.daily-meta span::before {
+  box-shadow: 0 0 0 4px rgba(111, 104, 255, 0.12);
+}
+
+@media (max-width: 860px) {
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+  }
+
+  .hero-mark {
+    width: 42px;
+    height: 42px;
+  }
+
+  .top-nav a::before {
+    width: 16px;
+    height: 16px;
+  }
+
+  .category-tune:hover {
+    transform: none;
+  }
+}

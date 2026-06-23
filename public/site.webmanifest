@@ -1,0 +1,17 @@
+{
+  "name": "DeepFind Tools",
+  "short_name": "DeepFind",
+  "description": "AI tools directory and daily AI briefing.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8fb",
+  "theme_color": "#f7f8fb",
+  "icons": [
+    {
+      "src": "/favicon.svg?v=3",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
