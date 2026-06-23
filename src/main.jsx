@@ -660,9 +660,13 @@ function DailyNewsPage() {
   const { tools, categories, news } = useData(false);
   const [query, setQuery] = useState("");
   const publishedNews = news.filter((item) => item.status !== "draft");
-  const article = publishedNews.find((item) => item.title?.includes("每日AI快讯")) || publishedNews[0] || fallbackNews[0];
-  const timelineItems = publishedNews.filter((item) => item.id !== article.id && item.title !== article.title);
-  const dailyItems = timelineItems.length >= 3 ? timelineItems : fallbackNews;
+  const introArticle = publishedNews.find((item) => item.title?.includes("每日AI快讯"));
+  const dailyIntro =
+    introArticle?.summary ||
+    "AI工具集每个工作日实时更新 AI 行业的最新资讯、新闻、热点、融资、产品动态、爆料等，让你随时了解人工智能领域最新趋势、更新突破和热门大事件。";
+  const dailyItems = publishedNews.length
+    ? publishedNews.filter((item) => !introArticle || item.id !== introArticle.id || item.title !== introArticle.title)
+    : fallbackNews;
   const grouped = groupNewsByDate(dailyItems);
   const hotTools = tools.filter((tool) => tool.featured).slice(0, 10);
   const latestTools = tools.filter((tool) => tool.isNew).slice(0, 8);
@@ -684,15 +688,15 @@ function DailyNewsPage() {
               <h1>每日AI快讯热闻</h1>
               <div className="daily-meta">
                 <span>AI快讯</span>
-                <span>{article.updatedLabel || "2小时前更新"}</span>
-                <span>{article.author || "AI小集"}</span>
-                <span>{article.comments || 75}</span>
-                <span>{article.likes || 1585}</span>
+                <span>{introArticle?.updatedLabel || "每日更新"}</span>
+                <span>{introArticle?.author || "AI小集"}</span>
+                <span>{introArticle?.comments || 75}</span>
+                <span>{introArticle?.likes || 1585}</span>
               </div>
             </header>
 
-            {article.coverImage ? (
-              <img className="daily-cover-img" src={article.coverImage} alt="每日AI快讯" />
+            {introArticle?.coverImage ? (
+              <img className="daily-cover-img" src={introArticle.coverImage} alt="每日AI快讯" />
             ) : (
               <div className="daily-cover">
                 <div className="daily-paper" aria-hidden="true">
@@ -707,10 +711,7 @@ function DailyNewsPage() {
               </div>
             )}
 
-            <p className="daily-intro">
-              {article.summary ||
-                "AI工具集每个工作日实时更新 AI 行业的最新资讯、新闻、热点、融资、产品动态、爆料等，让你随时了解人工智能领域最新趋势、更新突破和热门大事件。"}
-            </p>
+            <p className="daily-intro">{dailyIntro}</p>
 
             <div className="timeline">
               {grouped.map((group) => (
