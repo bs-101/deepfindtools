@@ -7,14 +7,7 @@ ADMIN_USER=admin
 ADMIN_PASSWORD=change_this_admin_password
 ```
 
-如果你没有改 `.env`，代码里的兜底默认值是：
-
-```bash
-账号：admin
-密码：admin123
-```
-
-正式上线一定要在 `.env` 里改掉 `ADMIN_PASSWORD`。
+`ADMIN_PASSWORD` 是必填项，正式部署前必须在服务器 `.env` 里设置强密码。不要把真实密码提交到 GitHub。
 
 ## 数据库
 
@@ -109,8 +102,9 @@ sudo certbot --nginx -d your-domain.com -d www.your-domain.com
 
 ```bash
 docker compose ps
-docker compose logs -f app
-docker compose restart app
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose restart backend frontend nginx
 docker compose down
 docker compose up -d --build
 ```

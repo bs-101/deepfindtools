@@ -970,7 +970,7 @@ function LoginPage() {
         <div>
           <p className="eyebrow">restricted access</p>
           <h1>登录后维护工具和资讯</h1>
-          <p>默认账号 admin / admin123。上线前用环境变量替换为强密码。</p>
+          <p>后台账号由服务器环境变量控制。请使用部署时配置的管理员凭据登录。</p>
         </div>
         <form className="console-form" onSubmit={submit}>
           <label>
@@ -984,7 +984,7 @@ function LoginPage() {
               value={form.password}
               onChange={(event) => setForm({ ...form, password: event.target.value })}
               autoComplete="current-password"
-              placeholder="admin123"
+              placeholder="输入后台密码"
             />
           </label>
           <button type="submit">登录后台</button>
