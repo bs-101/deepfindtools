@@ -7,7 +7,7 @@ export default function DailyRoute({ initialData, base }) {
       <Head>
         <title>每日 AI 资讯 - DeepFind Tools</title>
         <meta name="description" content="DeepFind Tools 每日 AI 资讯，整理 AI 行业新闻、模型动态、产品更新、融资和工具教程。" />
-        <link rel="canonical" href={`${base}/daily-ai-news/`} />
+        <link rel="canonical" href={`${base}/daily-ai-news`} />
         <meta property="og:title" content="每日 AI 资讯 - DeepFind Tools" />
         <meta property="og:description" content="AI 行业新闻、模型动态、产品更新、融资和工具教程。" />
       </Head>

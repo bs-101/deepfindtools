@@ -422,7 +422,7 @@ function TopNav() {
       <nav aria-label="顶部导航">
         <a href="/">AI工具集</a>
         <a href="/category/agent">AI应用集</a>
-        <a href="/daily-ai-news/">每日AI资讯</a>
+        <a href="/daily-ai-news">每日AI资讯</a>
         <a href="/category/latest">最新AI项目</a>
         <a href="/category/learning">AI教程资源</a>
         <a href="/#tools-index">关于我们</a>
@@ -562,7 +562,7 @@ function HomePage({ initialData = null } = {}) {
             <p className="eyebrow">daily pulse</p>
             <h2>每日 AI 资讯</h2>
           </div>
-          <a className="section-more" href="/daily-ai-news/">查看更多 &gt;&gt;</a>
+          <a className="section-more" href="/daily-ai-news">查看更多 &gt;&gt;</a>
         </div>
         <div className="news-filter">
           {["all", "资讯", "项目", "教程"].map((item) => (
@@ -573,7 +573,7 @@ function HomePage({ initialData = null } = {}) {
         </div>
         <div className="news-lanes">
           {filteredNews.slice(0, 8).map((item) => (
-            <SpotlightCard className="news-tile" key={item.id || item.title} as="a" href="/daily-ai-news/">
+            <SpotlightCard className="news-tile" key={item.id || item.title} as="a" href="/daily-ai-news">
               <time>{item.publishedAt || "今日"}</time>
               <div>
                 <strong>{item.title}</strong>
@@ -600,8 +600,8 @@ function PortalStrip() {
         ))}
       </div>
       <div className="portal-cards">
-        <FeatureTile href="/daily-ai-news/" tone="blue" icon="NEWS" title="每日 AI 快讯" subtitle="工具更新、模型动态、行业热闻" />
-        <FeatureTile href="/daily-ai-news/" tone="green" icon="AI" title="免费 AI 社群" subtitle="交流工具经验和使用案例" />
+        <FeatureTile href="/daily-ai-news" tone="blue" icon="NEWS" title="每日 AI 快讯" subtitle="工具更新、模型动态、行业热闻" />
+        <FeatureTile href="/daily-ai-news" tone="green" icon="AI" title="免费 AI 社群" subtitle="交流工具经验和使用案例" />
         <FeatureTile href="/category/latest" tone="violet" icon="NEW" title="最新 AI 项目" subtitle="新产品、开源项目和上线动态" />
         <FeatureTile href="/category/learning" tone="sky" icon="EDU" title="热门 AI 教程" subtitle="高频教程、提示词和实战资料" />
         <FeatureTile href="/category/video" tone="dark" icon="2.0" title="Seedance 2.0 上线" subtitle="视频生成能力更新" />
@@ -684,7 +684,7 @@ function DailyNewsPage({ initialData = null } = {}) {
           <div className="breadcrumb">
             <a href="/">首页</a>
             <span>·</span>
-            <a href="/daily-ai-news/">AI快讯</a>
+            <a href="/daily-ai-news">AI快讯</a>
             <span>·</span>
             <strong>每日AI快讯热闻</strong>
           </div>
@@ -747,7 +747,7 @@ function DailyNewsPage({ initialData = null } = {}) {
             <h3>最新文章</h3>
             <div className="mini-articles">
               {publishedNews.slice(0, 5).map((item) => (
-                <a key={item.id || item.title} href={item.sourceUrl || "/daily-ai-news/"}>
+                <a key={item.id || item.title} href={item.sourceUrl || "/daily-ai-news"}>
                   <strong>{item.title}</strong>
                   <span>{item.publishedAt || "今日"} · {item.kind || "资讯"}</span>
                 </a>
