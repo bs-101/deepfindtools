@@ -41,22 +41,47 @@ export async function getStaticProps({ params }) {
   const description = toolDescription(tool, initialData.categories);
   const image = tool.logo?.startsWith("/") ? `${base}${tool.logo}` : tool.logo || "";
   const canonical = `${base}/sites/${encodeURIComponent(id)}.html`;
+  const faqItems = Array.isArray(tool.faq)
+    ? tool.faq
+      .map((item) => ({
+        question: String(item.question || item.q || "").trim(),
+        answer: String(item.answer || item.a || "").trim(),
+      }))
+      .filter((item) => item.question && item.answer)
+    : [];
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: tool.name,
+      description: tool.summary || description,
+      applicationCategory: tool.category || "AIApplication",
+      url: canonical,
+      image,
+      offers: { "@type": "Offer", price: "0", priceCurrency: "CNY" },
+    },
+    faqItems.length
+      ? {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqItems.map((item) => ({
+          "@type": "Question",
+          name: item.question,
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: item.answer,
+          },
+        })),
+      }
+      : null,
+  ].filter(Boolean);
   return {
     props: {
       id,
       title: `${tool.name} - ${tool.summary || category} | DeepFind Tools`,
       description,
       image,
-      jsonLd: {
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        name: tool.name,
-        description: tool.summary || description,
-        applicationCategory: tool.category || "AIApplication",
-        url: canonical,
-        image,
-        offers: { "@type": "Offer", price: "0", priceCurrency: "CNY" },
-      },
+      jsonLd,
       canonical,
       initialData,
     },

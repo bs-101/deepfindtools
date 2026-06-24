@@ -329,6 +329,190 @@ function officialToolUrl(tool) {
   return tool?.officialUrl || tool?.url || "#";
 }
 
+function splitLines(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseFaq(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => ({
+        question: String(item.question || item.q || "").trim(),
+        answer: String(item.answer || item.a || "").trim(),
+      }))
+      .filter((item) => item.question && item.answer);
+  }
+  return splitLines(value)
+    .map((line) => {
+      const [question, ...answerParts] = line.split("|");
+      return {
+        question: String(question || "").trim(),
+        answer: answerParts.join("|").trim(),
+      };
+    })
+    .filter((item) => item.question && item.answer);
+}
+
+function stringifyFaq(value) {
+  return parseFaq(value)
+    .map((item) => `${item.question} | ${item.answer}`)
+    .join("\n");
+}
+
+function safeContentUrl(value) {
+  const url = String(value || "").trim();
+  if (!url) return "";
+  if (url.startsWith("/")) return url;
+  try {
+    const parsed = new URL(url);
+    return ["http:", "https:"].includes(parsed.protocol) ? url : "";
+  } catch {
+    return "";
+  }
+}
+
+function renderInlineMarkdown(text, keyPrefix = "inline") {
+  const source = String(text || "");
+  const tokens = [];
+  const pattern = /(\*\*([^*]+)\*\*|\[([^\]]+)\]\(([^)]+)\))/g;
+  let lastIndex = 0;
+  let index = 0;
+  for (const match of source.matchAll(pattern)) {
+    if (match.index > lastIndex) tokens.push(source.slice(lastIndex, match.index));
+    if (match[2]) {
+      tokens.push(<strong key={`${keyPrefix}-b-${index}`}>{match[2]}</strong>);
+    } else {
+      const href = safeContentUrl(match[4]);
+      tokens.push(
+        href ? (
+          <a key={`${keyPrefix}-a-${index}`} href={href} target={href.startsWith("/") ? undefined : "_blank"} rel={href.startsWith("/") ? undefined : "noopener noreferrer"}>
+            {match[3]}
+          </a>
+        ) : (
+          match[3]
+        ),
+      );
+    }
+    lastIndex = match.index + match[0].length;
+    index += 1;
+  }
+  if (lastIndex < source.length) tokens.push(source.slice(lastIndex));
+  return tokens;
+}
+
+function MarkdownContent({ value }) {
+  const lines = String(value || "").split(/\r?\n/);
+  const nodes = [];
+  let listItems = [];
+  let paragraph = [];
+
+  function flushList() {
+    if (!listItems.length) return;
+    nodes.push(
+      <ul key={`list-${nodes.length}`}>
+        {listItems.map((item, index) => (
+          <li key={`${nodes.length}-${index}`}>{renderInlineMarkdown(item, `li-${nodes.length}-${index}`)}</li>
+        ))}
+      </ul>,
+    );
+    listItems = [];
+  }
+
+  function flushParagraph() {
+    if (!paragraph.length) return;
+    nodes.push(<p key={`p-${nodes.length}`}>{renderInlineMarkdown(paragraph.join(" "), `p-${nodes.length}`)}</p>);
+    paragraph = [];
+  }
+
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) {
+      flushParagraph();
+      flushList();
+      return;
+    }
+    const image = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (image) {
+      flushParagraph();
+      flushList();
+      const src = safeContentUrl(image[2]);
+      if (src) {
+        nodes.push(
+          <figure className="markdown-figure" key={`img-${nodes.length}`}>
+            <img src={src} alt={image[1] || ""} loading="lazy" />
+            {image[1] ? <figcaption>{image[1]}</figcaption> : null}
+          </figure>,
+        );
+      }
+      return;
+    }
+    if (line.startsWith("### ")) {
+      flushParagraph();
+      flushList();
+      nodes.push(<h3 key={`h3-${nodes.length}`}>{renderInlineMarkdown(line.slice(4), `h3-${nodes.length}`)}</h3>);
+      return;
+    }
+    if (line.startsWith("## ")) {
+      flushParagraph();
+      flushList();
+      nodes.push(<h2 key={`h2-${nodes.length}`}>{renderInlineMarkdown(line.slice(3), `h2-${nodes.length}`)}</h2>);
+      return;
+    }
+    if (line.startsWith("- ")) {
+      flushParagraph();
+      listItems.push(line.slice(2));
+      return;
+    }
+    paragraph.push(line);
+  });
+  flushParagraph();
+  flushList();
+
+  return <div className="markdown-content">{nodes}</div>;
+}
+
+function defaultToolFeatures(tool, category) {
+  if (splitLines(tool.features).length) return splitLines(tool.features);
+  const tags = tool.tags || [];
+  return [
+    `面向 ${category} 场景，帮助用户更快完成信息处理、内容生成或工作流搭建。`,
+    tool.summary || `围绕 ${tool.name} 的核心能力提供 AI 辅助，适合在日常工作中快速试用。`,
+    tags.length ? `覆盖 ${tags.slice(0, 3).join("、")} 等关键词，方便和同类工具做横向比较。` : "提供清晰的官网入口和同类工具推荐，便于快速决策。",
+  ];
+}
+
+function defaultToolUseCases(tool, category) {
+  if (splitLines(tool.useCases).length) return splitLines(tool.useCases);
+  return [
+    `个人用户：用 ${tool.name} 快速验证 ${category} 相关需求，减少在多个工具之间反复试错。`,
+    `团队协作：把 ${tool.name} 作为项目流程中的一个候选工具，用于提升交付效率。`,
+    `运营选型：结合标签、简介和相似工具，判断它是否适合当前业务或内容生产场景。`,
+  ];
+}
+
+function defaultToolFaq(tool, category) {
+  const custom = parseFaq(tool.faq);
+  if (custom.length) return custom;
+  return [
+    {
+      question: `${tool.name} 是否免费？`,
+      answer: "具体免费额度、订阅价格和商用限制以官网最新说明为准，本站主要提供工具定位和入口参考。",
+    },
+    {
+      question: `${tool.name} 适合什么人使用？`,
+      answer: `适合正在寻找 ${category} 的创作者、设计师、运营、开发者、学生或团队用户。`,
+    },
+    {
+      question: `DeepFind Tools 为什么做 ${tool.name} 详情页？`,
+      answer: "详情页用于整理工具简介、分类、标签、官网入口和同类工具，帮助用户在访问官网前完成初步判断。",
+    },
+  ];
+}
+
 function Logo({ tool, size = "normal" }) {
   const [failed, setFailed] = useState(false);
   const hasLogo = Boolean(tool?.logo && !failed);
@@ -868,6 +1052,11 @@ function ToolDetailPage({ toolId, initialData = null }) {
   const category = tool ? categoryName(categories, tool.category) : "AI工具";
   const relatedTools = tool ? tools.filter((item) => item.category === tool.category && String(item.id) !== String(tool.id)).slice(0, 8) : [];
   const officialUrl = tool ? officialToolUrl(tool) : "#";
+  const customMarkdown = String(tool?.detailMarkdown || "").trim();
+  const galleryImages = splitLines(tool?.galleryImages).map(safeContentUrl).filter(Boolean);
+  const features = tool ? defaultToolFeatures(tool, category) : [];
+  const useCases = tool ? defaultToolUseCases(tool, category) : [];
+  const faqs = tool ? defaultToolFaq(tool, category) : [];
 
   useEffect(() => {
     if (tool?.name) document.title = `${tool.name} - ${category} | DeepFind Tools`;
@@ -920,12 +1109,47 @@ function ToolDetailPage({ toolId, initialData = null }) {
 
         <section className="detail-content">
           <div className="detail-main">
-            <h2>{tool.name} 是什么？</h2>
-            <p>{tool.summary || `${tool.name} 是一款 ${category}，适合需要 AI 辅助创作、办公、开发或学习的用户。`}</p>
-            <h2>{tool.name} 适合谁使用？</h2>
-            <p>适合正在寻找 {category} 的个人用户、创作者、设计师、运营、开发者和团队。你可以先在本站了解工具定位、标签和相关替代品，再前往官网体验。</p>
-            <h2>收录说明</h2>
-            <p>DeepFind Tools 会持续整理 AI 工具的分类、简介、官网入口和相关资讯。详情页用于搜索引擎收录和用户决策，官网访问会在新窗口打开。</p>
+            {customMarkdown ? (
+              <MarkdownContent value={customMarkdown} />
+            ) : (
+              <>
+                <h2>{tool.name} 是什么？</h2>
+                <p>{tool.summary || `${tool.name} 是一款 ${category}，适合需要 AI 辅助创作、办公、开发或学习的用户。`}</p>
+                <h2>核心能力</h2>
+                <ul className="detail-list">
+                  {features.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+                <h2>适合的使用场景</h2>
+                <ul className="detail-list">
+                  {useCases.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+                <h2>使用建议</h2>
+                <p>建议先确认 {tool.name} 的定价、数据隐私、模型能力和团队协作方式，再结合本站同类工具进行对比。对于生产环境或商业用途，优先查看官网最新条款与功能说明。</p>
+              </>
+            )}
+
+            {galleryImages.length ? (
+              <section className="detail-gallery" aria-label={`${tool.name} 图片展示`}>
+                {galleryImages.map((src, index) => (
+                  <figure key={`${src}-${index}`}>
+                    <img src={src} alt={`${tool.name} 展示图 ${index + 1}`} loading="lazy" />
+                    <figcaption>{tool.name} 展示图 {index + 1}</figcaption>
+                  </figure>
+                ))}
+              </section>
+            ) : null}
+
+            {faqs.length ? (
+              <section className="detail-faq">
+                <h2>常见问题</h2>
+                {faqs.map((item) => (
+                  <details key={item.question}>
+                    <summary>{item.question}</summary>
+                    <p>{item.answer}</p>
+                  </details>
+                ))}
+              </section>
+            ) : null}
           </div>
           <aside className="detail-side">
             <h3>工具信息</h3>
@@ -933,6 +1157,8 @@ function ToolDetailPage({ toolId, initialData = null }) {
               <dt>分类</dt><dd>{category}</dd>
               <dt>状态</dt><dd>{tool.isNew ? "新收录" : tool.featured ? "热门推荐" : "已收录"}</dd>
               <dt>标签</dt><dd>{(tool.tags || []).slice(0, 3).join(" / ") || category}</dd>
+              <dt>内容</dt><dd>{customMarkdown ? "已自定义详情" : "自动生成基础详情"}</dd>
+              {officialUrl && officialUrl !== "#" ? <><dt>官网</dt><dd><a href={officialUrl} target="_blank" rel="nofollow sponsored noopener noreferrer">打开官网</a></dd></> : null}
             </dl>
           </aside>
         </section>
@@ -1025,6 +1251,11 @@ function AdminPage() {
         .split(/[,，]/)
         .map((tag) => tag.trim())
         .filter(Boolean),
+      features: splitLines(toolForm.features),
+      useCases: splitLines(toolForm.useCases),
+      galleryImages: splitLines(toolForm.galleryImages),
+      faq: parseFaq(toolForm.faq),
+      detailMarkdown: String(toolForm.detailMarkdown || "").trim(),
       featured: toolForm.featured === "true",
       isNew: toolForm.isNew === "true",
     };
@@ -1052,7 +1283,7 @@ function AdminPage() {
     window.location.href = "/login";
   }
 
-  const shownTools = tools.filter((tool) => [tool.name, tool.summary, categoryName(categories, tool.category)].join(" ").toLowerCase().includes(toolQuery.toLowerCase()));
+  const shownTools = tools.filter((tool) => [tool.name, tool.summary, tool.detailMarkdown, categoryName(categories, tool.category)].join(" ").toLowerCase().includes(toolQuery.toLowerCase()));
   const shownNews = news.filter((item) => [item.title, item.summary, item.kind, item.sourceName].join(" ").toLowerCase().includes(newsQuery.toLowerCase()));
 
   if (loading) return <main className="loading-screen">正在打开后台...</main>;
@@ -1125,6 +1356,21 @@ function AdminPage() {
               </div>
               <label>标签<input value={toolForm.tags} onChange={(e) => updateTool("tags", e.target.value)} placeholder="写作, 免费, 生成" /></label>
               <label>简介<textarea value={toolForm.summary} onChange={(e) => updateTool("summary", e.target.value)} rows="4" /></label>
+              <label>
+                详情 Markdown
+                <textarea
+                  value={toolForm.detailMarkdown}
+                  onChange={(e) => updateTool("detailMarkdown", e.target.value)}
+                  rows="8"
+                  placeholder={`## ${toolForm.name || "工具名称"} 是什么？\n支持 **加粗**、[链接](https://example.com)、列表和图片。\n\n- 核心能力一\n- 核心能力二\n\n![产品截图](https://example.com/screenshot.png)`}
+                />
+              </label>
+              <label>详情图片<textarea value={toolForm.galleryImages} onChange={(e) => updateTool("galleryImages", e.target.value)} rows="3" placeholder="每行一个图片 URL，可放产品截图、封面图或功能图" /></label>
+              <div className="form-pair">
+                <label>核心能力<textarea value={toolForm.features} onChange={(e) => updateTool("features", e.target.value)} rows="4" placeholder="每行一条，用于未填写 Markdown 时的详情页内容" /></label>
+                <label>使用场景<textarea value={toolForm.useCases} onChange={(e) => updateTool("useCases", e.target.value)} rows="4" placeholder="每行一条，适合人群或具体业务场景" /></label>
+              </div>
+              <label>FAQ<textarea value={toolForm.faq} onChange={(e) => updateTool("faq", e.target.value)} rows="4" placeholder="问题 | 回答，每行一条。例如：是否免费？ | 请以官网最新定价为准。" /></label>
               <div className="form-pair">
                 <label>推荐<select value={toolForm.featured} onChange={(e) => updateTool("featured", e.target.value)}><option value="false">否</option><option value="true">是</option></select></label>
                 <label>新收录<select value={toolForm.isNew} onChange={(e) => updateTool("isNew", e.target.value)}><option value="true">是</option><option value="false">否</option></select></label>
@@ -1137,7 +1383,24 @@ function AdminPage() {
             <div className="panel-head"><div><span>Library</span><h2>工具库</h2></div><input value={toolQuery} onChange={(e) => setToolQuery(e.target.value)} placeholder="搜索工具、分类或简介" /></div>
             <div className="admin-list">
               {shownTools.slice(0, 160).map((tool) => (
-                <AdminRow key={tool.id} item={tool} meta={`${categoryName(categories, tool.category)} · ${tool.status || "published"}`} onEdit={() => setToolForm({ ...tool, tags: (tool.tags || []).join(", "), featured: String(Boolean(tool.featured)), isNew: String(Boolean(tool.isNew)) })} onDelete={() => remove("tools", tool.id)} />
+                <AdminRow
+                  key={tool.id}
+                  item={tool}
+                  meta={`${categoryName(categories, tool.category)} · ${tool.status || "published"}`}
+                  onEdit={() => setToolForm({
+                    ...emptyTool(),
+                    ...tool,
+                    tags: (tool.tags || []).join(", "),
+                    featured: String(Boolean(tool.featured)),
+                    isNew: String(Boolean(tool.isNew)),
+                    features: splitLines(tool.features).join("\n"),
+                    useCases: splitLines(tool.useCases).join("\n"),
+                    galleryImages: splitLines(tool.galleryImages).join("\n"),
+                    faq: stringifyFaq(tool.faq),
+                    detailMarkdown: tool.detailMarkdown || "",
+                  })}
+                  onDelete={() => remove("tools", tool.id)}
+                />
               ))}
             </div>
           </SpotlightCard>
@@ -1196,7 +1459,23 @@ function AdminRow({ item, meta, onEdit, onDelete }) {
 }
 
 function emptyTool() {
-  return { id: "", name: "", url: "", logo: "", category: "chat", status: "published", tags: "", summary: "", featured: "false", isNew: "true" };
+  return {
+    id: "",
+    name: "",
+    url: "",
+    logo: "",
+    category: "chat",
+    status: "published",
+    tags: "",
+    summary: "",
+    detailMarkdown: "",
+    galleryImages: "",
+    features: "",
+    useCases: "",
+    faq: "",
+    featured: "false",
+    isNew: "true",
+  };
 }
 
 function emptyNews() {

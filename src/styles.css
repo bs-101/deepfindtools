@@ -3419,6 +3419,131 @@ body {
   line-height: 1.9;
 }
 
+.markdown-content h2,
+.markdown-content h3 {
+  color: #111633;
+}
+
+.markdown-content h3 {
+  margin: 24px 0 10px;
+  font-size: 19px;
+}
+
+.markdown-content p,
+.markdown-content li {
+  color: #4f5b6d;
+  line-height: 1.9;
+}
+
+.markdown-content p:not(:first-child) {
+  margin-top: 12px;
+}
+
+.markdown-content ul,
+.detail-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.markdown-content ul {
+  margin-top: 12px;
+}
+
+.markdown-content li,
+.detail-list li {
+  position: relative;
+  padding-left: 20px;
+}
+
+.markdown-content li::before,
+.detail-list li::before {
+  position: absolute;
+  top: 0.72em;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #6f68ff, #5ed8ff);
+  content: "";
+}
+
+.markdown-content a,
+.detail-side a {
+  color: #3157ff;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.markdown-content strong {
+  color: #111633;
+  font-weight: 950;
+}
+
+.markdown-figure {
+  margin: 22px 0;
+}
+
+.markdown-figure img,
+.detail-gallery img {
+  display: block;
+  width: 100%;
+  border: 1px solid #e5ebf5;
+  border-radius: 14px;
+  background: #f7f9fc;
+  object-fit: cover;
+}
+
+.markdown-figure figcaption,
+.detail-gallery figcaption {
+  margin-top: 8px;
+  color: #8490a3;
+  font-size: 12px;
+  text-align: center;
+}
+
+.detail-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.detail-gallery figure {
+  margin: 0;
+}
+
+.detail-gallery img {
+  aspect-ratio: 16 / 9;
+}
+
+.detail-faq {
+  margin-top: 30px;
+}
+
+.detail-faq details {
+  border: 1px solid #e8edf6;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+.detail-faq details + details {
+  margin-top: 10px;
+}
+
+.detail-faq summary {
+  cursor: pointer;
+  padding: 14px 16px;
+  color: #111633;
+  font-weight: 950;
+}
+
+.detail-faq details p {
+  padding: 0 16px 16px;
+}
+
 .detail-side {
   padding: 18px;
 }
@@ -3488,6 +3613,10 @@ body {
 
   .detail-actions a {
     width: 100%;
+  }
+
+  .detail-gallery {
+    grid-template-columns: 1fr;
   }
 }
 
