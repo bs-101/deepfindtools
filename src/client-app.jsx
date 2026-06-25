@@ -1223,6 +1223,7 @@ function LoginPage() {
 
 function AdminPage() {
   const { tools, categories, news, loading, reload } = useData(true);
+  const [activeAdminSection, setActiveAdminSection] = useState("tools");
   const [toolQuery, setToolQuery] = useState("");
   const [newsQuery, setNewsQuery] = useState("");
   const [toolForm, setToolForm] = useState(emptyTool());
@@ -1340,112 +1341,165 @@ function AdminPage() {
           </div>
         </section>
 
-        <section className="admin-grid">
-          <SpotlightCard className="editor-panel" as="section">
-            <div className="editor-heading">
-              <span>Tool editor</span>
-              <h2>{toolForm.id ? `编辑工具：${toolForm.name}` : "新增工具"}</h2>
-            </div>
-            <form className="console-form" onSubmit={saveTool}>
-              <label>工具名称<input value={toolForm.name} onChange={(e) => updateTool("name", e.target.value)} required /></label>
-              <label>官网链接<input value={toolForm.url} onChange={(e) => updateTool("url", e.target.value)} required /></label>
-              <label>Logo 地址<input value={toolForm.logo} onChange={(e) => updateTool("logo", e.target.value)} /></label>
-              <div className="form-pair">
-                <label>分类<select value={toolForm.category} onChange={(e) => updateTool("category", e.target.value)}>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-                <label>状态<select value={toolForm.status} onChange={(e) => updateTool("status", e.target.value)}><option value="published">发布</option><option value="draft">草稿</option></select></label>
-              </div>
-              <label>标签<input value={toolForm.tags} onChange={(e) => updateTool("tags", e.target.value)} placeholder="写作, 免费, 生成" /></label>
-              <label>简介<textarea value={toolForm.summary} onChange={(e) => updateTool("summary", e.target.value)} rows="4" /></label>
-              <label>
-                详情 Markdown
-                <textarea
-                  value={toolForm.detailMarkdown}
-                  onChange={(e) => updateTool("detailMarkdown", e.target.value)}
-                  rows="8"
-                  placeholder={`## ${toolForm.name || "工具名称"} 是什么？\n支持 **加粗**、[链接](https://example.com)、列表和图片。\n\n- 核心能力一\n- 核心能力二\n\n![产品截图](https://example.com/screenshot.png)`}
-                />
-              </label>
-              <label>详情图片<textarea value={toolForm.galleryImages} onChange={(e) => updateTool("galleryImages", e.target.value)} rows="3" placeholder="每行一个图片 URL，可放产品截图、封面图或功能图" /></label>
-              <div className="form-pair">
-                <label>核心能力<textarea value={toolForm.features} onChange={(e) => updateTool("features", e.target.value)} rows="4" placeholder="每行一条，用于未填写 Markdown 时的详情页内容" /></label>
-                <label>使用场景<textarea value={toolForm.useCases} onChange={(e) => updateTool("useCases", e.target.value)} rows="4" placeholder="每行一条，适合人群或具体业务场景" /></label>
-              </div>
-              <label>FAQ<textarea value={toolForm.faq} onChange={(e) => updateTool("faq", e.target.value)} rows="4" placeholder="问题 | 回答，每行一条。例如：是否免费？ | 请以官网最新定价为准。" /></label>
-              <div className="form-pair">
-                <label>推荐<select value={toolForm.featured} onChange={(e) => updateTool("featured", e.target.value)}><option value="false">否</option><option value="true">是</option></select></label>
-                <label>新收录<select value={toolForm.isNew} onChange={(e) => updateTool("isNew", e.target.value)}><option value="true">是</option><option value="false">否</option></select></label>
-              </div>
-              <div className="form-actions"><button type="submit">保存工具</button><button type="button" onClick={() => setToolForm(emptyTool())}>清空</button></div>
-            </form>
-          </SpotlightCard>
-
-          <SpotlightCard className="list-panel" as="section">
-            <div className="panel-head"><div><span>Library</span><h2>工具库</h2></div><input value={toolQuery} onChange={(e) => setToolQuery(e.target.value)} placeholder="搜索工具、分类或简介" /></div>
-            <div className="admin-list">
-              {shownTools.slice(0, 160).map((tool) => (
-                <AdminRow
-                  key={tool.id}
-                  item={tool}
-                  meta={`${categoryName(categories, tool.category)} · ${tool.status || "published"}`}
-                  onEdit={() => setToolForm({
-                    ...emptyTool(),
-                    ...tool,
-                    tags: (tool.tags || []).join(", "),
-                    featured: String(Boolean(tool.featured)),
-                    isNew: String(Boolean(tool.isNew)),
-                    features: splitLines(tool.features).join("\n"),
-                    useCases: splitLines(tool.useCases).join("\n"),
-                    galleryImages: splitLines(tool.galleryImages).join("\n"),
-                    faq: stringifyFaq(tool.faq),
-                    detailMarkdown: tool.detailMarkdown || "",
-                  })}
-                  onDelete={() => remove("tools", tool.id)}
-                />
-              ))}
-            </div>
-          </SpotlightCard>
+        <section className="admin-switchboard" aria-label="后台模块切换">
+          <button className={activeAdminSection === "tools" ? "active" : ""} type="button" onClick={() => setActiveAdminSection("tools")}>
+            <strong>工具内容</strong>
+            <span>详情页、Logo、分类和 SEO 内容</span>
+          </button>
+          <button className={activeAdminSection === "news" ? "active" : ""} type="button" onClick={() => setActiveAdminSection("news")}>
+            <strong>每日资讯</strong>
+            <span>快讯时间线、来源和封面内容</span>
+          </button>
         </section>
 
-        <section className="admin-grid">
-          <SpotlightCard className="editor-panel" as="section">
-            <div className="editor-heading">
-              <span>Daily news</span>
-              <h2>{newsForm.id ? `编辑资讯：${newsForm.title}` : "新增每日资讯"}</h2>
-            </div>
-            <form className="console-form" onSubmit={saveNews}>
-              <label>标题<input value={newsForm.title} onChange={(e) => updateNews("title", e.target.value)} required /></label>
-              <div className="form-pair">
-                <label>类型<select value={newsForm.kind} onChange={(e) => updateNews("kind", e.target.value)}><option value="资讯">资讯</option><option value="项目">项目</option><option value="教程">教程</option><option value="模型">模型</option></select></label>
-                <label>日期<input type="date" value={newsForm.publishedAt} onChange={(e) => updateNews("publishedAt", e.target.value)} /></label>
+        {activeAdminSection === "tools" ? (
+          <section className="admin-grid admin-module">
+            <SpotlightCard className="editor-panel" as="section">
+              <div className="editor-heading">
+                <span>Tool editor</span>
+                <h2>{toolForm.id ? `编辑工具：${toolForm.name}` : "新增工具"}</h2>
+                <p>{toolForm.id ? "已把前台默认详情带入表单；留空 Markdown 时，前台使用核心能力、使用场景和 FAQ 生成详情页。" : "先录入基础信息，再补充详情内容。重点工具建议写 Markdown 和配图。"}</p>
               </div>
-              <div className="form-pair">
-                <label>来源名称<input value={newsForm.sourceName} onChange={(e) => updateNews("sourceName", e.target.value)} placeholder="机器之心 / AI工具集" /></label>
-                <label>来源链接<input value={newsForm.sourceUrl} onChange={(e) => updateNews("sourceUrl", e.target.value)} /></label>
-              </div>
-              <label>封面图地址<input value={newsForm.coverImage} onChange={(e) => updateNews("coverImage", e.target.value)} placeholder="用于每日快讯页头图，可留空" /></label>
-              <label>摘要 / 正文<textarea value={newsForm.summary} onChange={(e) => updateNews("summary", e.target.value)} rows="4" /></label>
-              <div className="form-pair">
-                <label>评论数<input type="number" value={newsForm.comments} onChange={(e) => updateNews("comments", e.target.value)} /></label>
-                <label>点赞数<input type="number" value={newsForm.likes} onChange={(e) => updateNews("likes", e.target.value)} /></label>
-              </div>
-              <label>状态<select value={newsForm.status} onChange={(e) => updateNews("status", e.target.value)}><option value="published">发布</option><option value="draft">草稿</option></select></label>
-              <div className="form-actions"><button type="submit">保存资讯</button><button type="button" onClick={() => setNewsForm(emptyNews())}>清空</button></div>
-            </form>
-          </SpotlightCard>
+              <form className="console-form admin-editor-form" onSubmit={saveTool}>
+                <div className="form-cluster">
+                  <h3>基础信息</h3>
+                  <label>工具名称<input value={toolForm.name} onChange={(e) => updateTool("name", e.target.value)} required /></label>
+                  <label>官网链接<input value={toolForm.url} onChange={(e) => updateTool("url", e.target.value)} required /></label>
+                  <label>Logo 地址<input value={toolForm.logo} onChange={(e) => updateTool("logo", e.target.value)} /></label>
+                  <div className="form-pair">
+                    <label>分类<select value={toolForm.category} onChange={(e) => updateTool("category", e.target.value)}>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+                    <label>状态<select value={toolForm.status} onChange={(e) => updateTool("status", e.target.value)}><option value="published">发布</option><option value="draft">草稿</option></select></label>
+                  </div>
+                  <label>标签<input value={toolForm.tags} onChange={(e) => updateTool("tags", e.target.value)} placeholder="写作, 免费, 生成" /></label>
+                  <label>简介<textarea value={toolForm.summary} onChange={(e) => updateTool("summary", e.target.value)} rows="4" /></label>
+                </div>
 
-          <SpotlightCard className="list-panel" as="section">
-            <div className="panel-head"><div><span>Briefing</span><h2>每日资讯</h2></div><input value={newsQuery} onChange={(e) => setNewsQuery(e.target.value)} placeholder="搜索标题、来源或类型" /></div>
-            <div className="admin-list">
-              {shownNews.map((item) => (
-                <AdminRow key={item.id} item={{ ...item, name: item.title }} meta={`${item.publishedAt || "未定日期"} · ${item.kind || "资讯"} · ${item.status || "published"}`} onEdit={() => setNewsForm({ ...emptyNews(), ...item })} onDelete={() => remove("news", item.id)} />
-              ))}
-            </div>
-          </SpotlightCard>
-        </section>
+                <div className="form-cluster detail-cluster">
+                  <h3>详情页编排</h3>
+                  <label>
+                    详情 Markdown
+                    <textarea
+                      value={toolForm.detailMarkdown}
+                      onChange={(e) => updateTool("detailMarkdown", e.target.value)}
+                      rows="8"
+                      placeholder={`## ${toolForm.name || "工具名称"} 是什么？\n支持 **加粗**、[链接](https://example.com)、列表和图片。\n\n- 核心能力一\n- 核心能力二\n\n![产品截图](https://example.com/screenshot.png)`}
+                    />
+                  </label>
+                  <label>详情图片<textarea value={toolForm.galleryImages} onChange={(e) => updateTool("galleryImages", e.target.value)} rows="3" placeholder="每行一个图片 URL，可放产品截图、封面图或功能图" /></label>
+                  <div className="form-pair">
+                    <label>核心能力<textarea value={toolForm.features} onChange={(e) => updateTool("features", e.target.value)} rows="4" placeholder="每行一条，用于未填写 Markdown 时的详情页内容" /></label>
+                    <label>使用场景<textarea value={toolForm.useCases} onChange={(e) => updateTool("useCases", e.target.value)} rows="4" placeholder="每行一条，适合人群或具体业务场景" /></label>
+                  </div>
+                  <label>FAQ<textarea value={toolForm.faq} onChange={(e) => updateTool("faq", e.target.value)} rows="4" placeholder="问题 | 回答，每行一条。例如：是否免费？ | 请以官网最新定价为准。" /></label>
+                </div>
+
+                <div className="form-cluster compact-cluster">
+                  <h3>展示策略</h3>
+                  <div className="form-pair">
+                    <label>推荐<select value={toolForm.featured} onChange={(e) => updateTool("featured", e.target.value)}><option value="false">否</option><option value="true">是</option></select></label>
+                    <label>新收录<select value={toolForm.isNew} onChange={(e) => updateTool("isNew", e.target.value)}><option value="true">是</option><option value="false">否</option></select></label>
+                  </div>
+                </div>
+
+                <div className="form-actions"><button type="submit">保存工具</button><button type="button" onClick={() => setToolForm(emptyTool())}>清空</button></div>
+              </form>
+            </SpotlightCard>
+
+            <SpotlightCard className="list-panel" as="section">
+              <div className="panel-head"><div><span>Library</span><h2>工具库</h2></div><input value={toolQuery} onChange={(e) => setToolQuery(e.target.value)} placeholder="搜索工具、分类或简介" /></div>
+              <div className="admin-list">
+                {shownTools.slice(0, 160).map((tool) => (
+                  <AdminRow
+                    key={tool.id}
+                    item={tool}
+                    meta={`${categoryName(categories, tool.category)} · ${tool.status || "published"}`}
+                    onEdit={() => {
+                      setToolForm(toolToForm(tool, categories));
+                      setActiveAdminSection("tools");
+                    }}
+                    onDelete={() => remove("tools", tool.id)}
+                  />
+                ))}
+              </div>
+            </SpotlightCard>
+          </section>
+        ) : (
+          <section className="admin-grid admin-module news-module">
+            <SpotlightCard className="editor-panel" as="section">
+              <div className="editor-heading">
+                <span>Daily news</span>
+                <h2>{newsForm.id ? `编辑资讯：${newsForm.title}` : "新增每日资讯"}</h2>
+                <p>资讯会进入每日 AI 快讯页，建议标题短一些，摘要写完整事实和来源。</p>
+              </div>
+              <form className="console-form admin-editor-form" onSubmit={saveNews}>
+                <div className="form-cluster">
+                  <h3>资讯内容</h3>
+                  <label>标题<input value={newsForm.title} onChange={(e) => updateNews("title", e.target.value)} required /></label>
+                  <div className="form-pair">
+                    <label>类型<select value={newsForm.kind} onChange={(e) => updateNews("kind", e.target.value)}><option value="资讯">资讯</option><option value="项目">项目</option><option value="教程">教程</option><option value="模型">模型</option></select></label>
+                    <label>日期<input type="date" value={newsForm.publishedAt} onChange={(e) => updateNews("publishedAt", e.target.value)} /></label>
+                  </div>
+                  <div className="form-pair">
+                    <label>来源名称<input value={newsForm.sourceName} onChange={(e) => updateNews("sourceName", e.target.value)} placeholder="机器之心 / AI工具集" /></label>
+                    <label>来源链接<input value={newsForm.sourceUrl} onChange={(e) => updateNews("sourceUrl", e.target.value)} /></label>
+                  </div>
+                  <label>封面图地址<input value={newsForm.coverImage} onChange={(e) => updateNews("coverImage", e.target.value)} placeholder="用于每日快讯页头图，可留空" /></label>
+                  <label>摘要 / 正文<textarea value={newsForm.summary} onChange={(e) => updateNews("summary", e.target.value)} rows="6" /></label>
+                </div>
+                <div className="form-cluster compact-cluster">
+                  <h3>互动与状态</h3>
+                  <div className="form-pair">
+                    <label>评论数<input type="number" value={newsForm.comments} onChange={(e) => updateNews("comments", e.target.value)} /></label>
+                    <label>点赞数<input type="number" value={newsForm.likes} onChange={(e) => updateNews("likes", e.target.value)} /></label>
+                  </div>
+                  <label>状态<select value={newsForm.status} onChange={(e) => updateNews("status", e.target.value)}><option value="published">发布</option><option value="draft">草稿</option></select></label>
+                </div>
+                <div className="form-actions"><button type="submit">保存资讯</button><button type="button" onClick={() => setNewsForm(emptyNews())}>清空</button></div>
+              </form>
+            </SpotlightCard>
+
+            <SpotlightCard className="list-panel" as="section">
+              <div className="panel-head"><div><span>Briefing</span><h2>每日资讯</h2></div><input value={newsQuery} onChange={(e) => setNewsQuery(e.target.value)} placeholder="搜索标题、来源或类型" /></div>
+              <div className="admin-list">
+                {shownNews.map((item) => (
+                  <AdminRow
+                    key={item.id}
+                    item={{ ...item, name: item.title }}
+                    meta={`${item.publishedAt || "未定日期"} · ${item.kind || "资讯"} · ${item.status || "published"}`}
+                    onEdit={() => {
+                      setNewsForm({ ...emptyNews(), ...item });
+                      setActiveAdminSection("news");
+                    }}
+                    onDelete={() => remove("news", item.id)}
+                  />
+                ))}
+              </div>
+            </SpotlightCard>
+          </section>
+        )}
         <p className="form-message">{message}</p>
       </main>
     </div>
   );
+}
+
+function toolToForm(tool, categories) {
+  const category = categoryName(categories, tool.category);
+  const features = splitLines(tool.features);
+  const useCases = splitLines(tool.useCases);
+  const faq = parseFaq(tool.faq);
+  return {
+    ...emptyTool(),
+    ...tool,
+    tags: (tool.tags || []).join(", "),
+    featured: String(Boolean(tool.featured)),
+    isNew: String(Boolean(tool.isNew)),
+    features: (features.length ? features : defaultToolFeatures(tool, category)).join("\n"),
+    useCases: (useCases.length ? useCases : defaultToolUseCases(tool, category)).join("\n"),
+    galleryImages: splitLines(tool.galleryImages).join("\n"),
+    faq: stringifyFaq(faq.length ? faq : defaultToolFaq(tool, category)),
+    detailMarkdown: tool.detailMarkdown || "",
+  };
 }
 
 function AdminRow({ item, meta, onEdit, onDelete }) {

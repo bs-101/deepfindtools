@@ -2514,9 +2514,91 @@ body {
 }
 
 .admin-grid {
-  grid-template-columns: minmax(380px, 0.72fr) minmax(0, 1.28fr);
+  grid-template-columns: minmax(520px, 0.95fr) minmax(360px, 0.8fr);
   gap: 18px;
   align-items: start;
+}
+
+.admin-switchboard {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  border: 1px solid #e8edf6;
+  border-radius: 16px;
+  padding: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(247, 250, 255, 0.92)),
+    #fff;
+  box-shadow: 0 12px 28px rgba(18, 27, 48, 0.045);
+}
+
+.admin-switchboard button {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-height: 72px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 14px 16px 14px 46px;
+  color: #5d6678;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-switchboard button::before {
+  position: absolute;
+  top: 18px;
+  left: 16px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #cdd7e8;
+  border-radius: 7px;
+  background: #fff;
+  content: "";
+}
+
+.admin-switchboard button.active {
+  border-color: rgba(111, 104, 255, 0.26);
+  color: #111633;
+  background:
+    linear-gradient(135deg, rgba(238, 242, 255, 0.92), rgba(255, 255, 255, 0.96)),
+    #fff;
+  box-shadow: 0 12px 24px rgba(82, 96, 255, 0.12);
+}
+
+.admin-switchboard button.active::before {
+  border-color: #6f68ff;
+  background:
+    linear-gradient(135deg, #6f68ff, #51c8ff);
+  box-shadow: 0 8px 18px rgba(82, 96, 255, 0.22);
+}
+
+.admin-switchboard strong {
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.admin-switchboard span {
+  color: #7a8394;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-module {
+  animation: adminModuleIn 220ms ease both;
+}
+
+@keyframes adminModuleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .editor-panel,
@@ -2530,6 +2612,13 @@ body {
 
 .editor-heading {
   margin-bottom: 16px;
+}
+
+.editor-heading p {
+  margin: 8px 0 0;
+  color: #697386;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .editor-heading span,
@@ -2567,6 +2656,49 @@ body {
 
 .console-form {
   gap: 11px;
+}
+
+.admin-editor-form {
+  gap: 14px;
+}
+
+.form-cluster {
+  display: grid;
+  gap: 11px;
+  border: 1px solid #edf1f7;
+  border-radius: 14px;
+  padding: 14px;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+}
+
+.form-cluster h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #111633;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.form-cluster h3::before {
+  width: 8px;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #6f68ff, #51c8ff);
+  content: "";
+}
+
+.detail-cluster {
+  border-color: rgba(111, 104, 255, 0.22);
+  background:
+    linear-gradient(135deg, rgba(248, 250, 255, 0.96), rgba(255, 255, 255, 0.98)),
+    #fff;
+}
+
+.compact-cluster {
+  background: #fbfcff;
 }
 
 .console-form label {
@@ -2621,7 +2753,7 @@ body {
 
 .admin-list {
   gap: 8px;
-  max-height: 620px;
+  max-height: 760px;
   padding-right: 4px;
 }
 
@@ -2684,6 +2816,10 @@ body {
   .admin-metrics,
   .admin-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-module {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -3211,6 +3347,14 @@ body {
     gap: 10px;
   }
 
+  .admin-switchboard {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-switchboard button {
+    min-height: 64px;
+  }
+
   .admin-metrics div {
     border-radius: 12px;
     padding: 13px;
@@ -3224,6 +3368,11 @@ body {
   .list-panel {
     border-radius: 14px;
     padding: 14px;
+  }
+
+  .form-cluster {
+    border-radius: 12px;
+    padding: 12px;
   }
 
   .admin-row {
