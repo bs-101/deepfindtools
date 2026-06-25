@@ -134,6 +134,25 @@
       "isNew": false
     },
     {
+      "id": "900001",
+      "url": "https://robloxguimaker.dev/",
+      "logo": "",
+      "name": "Roblox GUI Maker",
+      "tags": [
+        "AI编程工具",
+        "Roblox",
+        "Lua",
+        "游戏UI"
+      ],
+      "isNew": true,
+      "status": "published",
+      "summary": "面向 Roblox Studio 的 GUI 布局与 Lua 起步代码生成工具",
+      "category": "code",
+      "featured": false,
+      "detailUrl": "https://robloxguimaker.dev/",
+      "logoRemote": ""
+    },
+    {
       "id": "2644",
       "detailUrl": "https://www.aippt.cn/?utm_type=Navweb&utm_source=ai-bot&utm_page=aippt&utm_plan=ppt&utm_unit=AIPPT&utm_keyword=50608",
       "url": "https://www.aippt.cn/?utm_type=Navweb&utm_source=ai-bot&utm_page=aippt&utm_plan=ppt&utm_unit=AIPPT&utm_keyword=50608",

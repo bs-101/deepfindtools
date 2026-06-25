@@ -166,6 +166,25 @@
       "logoRemote": "https://ai-bot.cn/wp-content/uploads/2025/10/Cursor-logo.png"
     },
     {
+      "id": "900001",
+      "url": "https://robloxguimaker.dev/",
+      "logo": "",
+      "name": "Roblox GUI Maker",
+      "tags": [
+        "AI编程工具",
+        "Roblox",
+        "Lua",
+        "游戏UI"
+      ],
+      "isNew": true,
+      "status": "published",
+      "summary": "面向 Roblox Studio 的 GUI 布局与 Lua 起步代码生成工具",
+      "category": "code",
+      "featured": false,
+      "detailUrl": "https://robloxguimaker.dev/",
+      "logoRemote": ""
+    },
+    {
       "id": "8840",
       "url": "https://www.islide.cc/landing?utm=cg&cgv=aibot",
       "logo": "https://ai-bot.cn/wp-content/uploads/2024/02/islide-icon.png",
