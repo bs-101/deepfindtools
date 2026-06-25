@@ -4122,6 +4122,25 @@
       "featured": false,
       "detailUrl": "https://ai-bot.cn/sites/10847.html",
       "logoRemote": "https://ai-bot.cn/wp-content/uploads/2024/04/youyan-icon.png"
+    },
+    {
+      "id": "remio",
+      "url": "https://remio.ai/",
+      "logo": "https://remio.ai/favicon.ico",
+      "name": "Remio",
+      "tags": [
+        "AI办公工具",
+        "知识库",
+        "记忆",
+        "本地优先"
+      ],
+      "isNew": true,
+      "status": "published",
+      "summary": "本地优先的 AI 记忆和个人知识库，解析文件、网页、录音、邮件、消息、图片和笔记，并通过本地索引与向量检索个人上下文。",
+      "category": "office",
+      "featured": false,
+      "detailUrl": "https://remio.ai/",
+      "logoRemote": "https://remio.ai/favicon.ico"
     }
   ],
   "news": [
