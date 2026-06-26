@@ -85,6 +85,30 @@ services:
     profiles:
       - tunnel
 
+  collector:
+    build:
+      context: .
+      target: backend
+    container_name: deepfindtools-local-collector
+    restart: unless-stopped
+    profiles:
+      - automation
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_ENGINE: ${DB_ENGINE:-django.db.backends.mysql}
+      DB_NAME: ${DB_NAME:-adops_db}
+      DB_USER: ${DB_USER:-adops_user}
+      DB_PASSWORD: ${DB_PASSWORD:-your_password}
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_PORT: ${DB_PORT:-3306}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://ai.deepfindtools.com}
+      CANDIDATE_LIMIT: ${CANDIDATE_LIMIT:-12}
+      COLLECT_INTERVAL_SECONDS: ${COLLECT_INTERVAL_SECONDS:-21600}
+      PRODUCT_HUNT_TOKEN: ${PRODUCT_HUNT_TOKEN:-}
+    command: ["python", "scripts/collect_candidates.py", "--loop"]
+
 volumes:
   mysql_data:
   logo_cache:

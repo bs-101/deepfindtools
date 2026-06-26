@@ -112,23 +112,24 @@ const fallbackNews = [
 ];
 
 function useData(includeDrafts = false, initialData = null) {
-  const [data, setData] = useState(() => initialData ? { tools: initialData.tools || [], categories: initialData.categories || [], news: initialData.news || [], loading: false } : { tools: [], categories: [], news: [], loading: true });
+  const [data, setData] = useState(() => initialData ? { tools: initialData.tools || [], categories: initialData.categories || [], news: initialData.news || [], candidates: [], loading: false } : { tools: [], categories: [], news: [], candidates: [], loading: true });
 
   async function load() {
     try {
       const query = includeDrafts ? "?includeDrafts=1" : "";
-      const [tools, categories, news] = await Promise.all([
+      const [tools, categories, news, candidates] = await Promise.all([
         api.get(`/api/tools${query}`),
         api.get("/api/categories"),
         api.get(`/api/news${query}`),
+        includeDrafts ? api.get("/api/candidates") : Promise.resolve([]),
       ]);
-      setData({ tools, categories, news, loading: false });
+      setData({ tools, categories, news, candidates, loading: false });
     } catch (error) {
       if (error.message === "UNAUTHORIZED") {
         throw error;
       }
       const seed = await api.get("/data/seed.json");
-      setData({ tools: seed.tools || [], categories: seed.categories || [], news: seed.news || [], loading: false });
+      setData({ tools: seed.tools || [], categories: seed.categories || [], news: seed.news || [], candidates: [], loading: false });
     }
   }
 
@@ -1222,10 +1223,11 @@ function LoginPage() {
 }
 
 function AdminPage() {
-  const { tools, categories, news, loading, reload } = useData(true);
+  const { tools, categories, news, candidates, loading, reload } = useData(true);
   const [activeAdminSection, setActiveAdminSection] = useState("tools");
   const [toolQuery, setToolQuery] = useState("");
   const [newsQuery, setNewsQuery] = useState("");
+  const [candidateQuery, setCandidateQuery] = useState("");
   const [toolForm, setToolForm] = useState(emptyTool());
   const [newsForm, setNewsForm] = useState(emptyNews());
   const [message, setMessage] = useState("");
@@ -1274,6 +1276,23 @@ function AdminPage() {
     await reload();
   }
 
+  async function acceptCandidate(candidate, targetType = candidate.type || "news") {
+    if (targetType === "tool") {
+      await api.send("/api/tools", "POST", candidateToToolForm(candidate));
+    } else {
+      await api.send("/api/news", "POST", candidateToNewsForm(candidate));
+    }
+    await api.send(`/api/candidates/${encodeURIComponent(candidate.id)}`, "PUT", { status: "accepted", acceptedAs: targetType, acceptedAt: new Date().toISOString() });
+    setMessage(`候选已采纳为${targetType === "tool" ? "工具草稿" : "资讯草稿"}`);
+    await reload();
+  }
+
+  async function rejectCandidate(candidate) {
+    await api.send(`/api/candidates/${encodeURIComponent(candidate.id)}`, "PUT", { status: "rejected", rejectedAt: new Date().toISOString() });
+    setMessage("候选已拒绝");
+    await reload();
+  }
+
   async function remove(collection, id) {
     await api.send(`/api/${collection}/${encodeURIComponent(id)}`, "DELETE", {});
     await reload();
@@ -1286,6 +1305,13 @@ function AdminPage() {
 
   const shownTools = tools.filter((tool) => [tool.name, tool.summary, tool.detailMarkdown, categoryName(categories, tool.category)].join(" ").toLowerCase().includes(toolQuery.toLowerCase()));
   const shownNews = news.filter((item) => [item.title, item.summary, item.kind, item.sourceName].join(" ").toLowerCase().includes(newsQuery.toLowerCase()));
+  const shownCandidates = candidates
+    .filter((item) => [item.title, item.name, item.summary, item.sourceName, item.reason, item.type, item.status].join(" ").toLowerCase().includes(candidateQuery.toLowerCase()))
+    .sort((a, b) => {
+      const statusRank = { pending: 0, accepted: 1, rejected: 2 };
+      return (statusRank[a.status] ?? 3) - (statusRank[b.status] ?? 3) || Number(b.score || 0) - Number(a.score || 0);
+    });
+  const pendingCandidates = candidates.filter((item) => (item.status || "pending") === "pending");
 
   if (loading) return <main className="loading-screen">正在打开后台...</main>;
 
@@ -1315,7 +1341,7 @@ function AdminPage() {
             <h1>内容运营后台</h1>
             <p>维护工具库、Logo、分类、推荐状态和每日 AI 快讯内容。</p>
           </div>
-          <span>PostgreSQL · {tools.length} 工具 / {news.length} 资讯</span>
+          <span>PostgreSQL · {tools.length} 工具 / {news.length} 资讯 / {pendingCandidates.length} 待审</span>
         </header>
 
         <section className="admin-metrics" aria-label="后台概览">
@@ -1335,9 +1361,9 @@ function AdminPage() {
             <small>用于热门模块与侧栏</small>
           </div>
           <div>
-            <span>每日资讯</span>
-            <strong>{news.length}</strong>
-            <small>草稿 {news.filter((item) => item.status === "draft").length}</small>
+            <span>候选池</span>
+            <strong>{pendingCandidates.length}</strong>
+            <small>全部候选 {candidates.length}</small>
           </div>
         </section>
 
@@ -1349,6 +1375,10 @@ function AdminPage() {
           <button className={activeAdminSection === "news" ? "active" : ""} type="button" onClick={() => setActiveAdminSection("news")}>
             <strong>每日资讯</strong>
             <span>快讯时间线、来源和封面内容</span>
+          </button>
+          <button className={activeAdminSection === "candidates" ? "active" : ""} type="button" onClick={() => setActiveAdminSection("candidates")}>
+            <strong>候选审核</strong>
+            <span>自动采集结果，确认后再入库</span>
           </button>
         </section>
 
@@ -1423,7 +1453,7 @@ function AdminPage() {
               </div>
             </SpotlightCard>
           </section>
-        ) : (
+        ) : activeAdminSection === "news" ? (
           <section className="admin-grid admin-module news-module">
             <SpotlightCard className="editor-panel" as="section">
               <div className="editor-heading">
@@ -1476,6 +1506,46 @@ function AdminPage() {
               </div>
             </SpotlightCard>
           </section>
+        ) : (
+          <section className="admin-module candidate-module">
+            <SpotlightCard className="list-panel candidate-panel" as="section">
+              <div className="panel-head">
+                <div>
+                  <span>Review queue</span>
+                  <h2>候选审核</h2>
+                </div>
+                <input value={candidateQuery} onChange={(e) => setCandidateQuery(e.target.value)} placeholder="搜索标题、来源、状态或推荐理由" />
+              </div>
+              <div className="candidate-list">
+                {shownCandidates.map((candidate) => (
+                  <article className={`candidate-card status-${candidate.status || "pending"}`} key={candidate.id}>
+                    <div className="candidate-score">
+                      <strong>{candidate.score || 60}</strong>
+                      <span>{candidate.type === "tool" ? "工具" : "资讯"}</span>
+                    </div>
+                    <div className="candidate-body">
+                      <div className="candidate-title">
+                        <h3>{candidate.title || candidate.name}</h3>
+                        <span>{candidate.status || "pending"}</span>
+                      </div>
+                      <p>{candidate.summary}</p>
+                      <small>{candidate.sourceName || "自动采集"} · {candidate.reason || "待人工确认"}</small>
+                      <div className="candidate-actions">
+                        {candidate.url || candidate.sourceUrl ? <a href={candidate.url || candidate.sourceUrl} target="_blank" rel="noopener noreferrer">查看来源</a> : null}
+                        <button type="button" onClick={() => { setToolForm(candidateToToolForm(candidate)); setActiveAdminSection("tools"); }}>编辑为工具</button>
+                        <button type="button" onClick={() => { setNewsForm(candidateToNewsForm(candidate)); setActiveAdminSection("news"); }}>编辑为资讯</button>
+                        <button type="button" onClick={() => acceptCandidate(candidate, "tool")}>采纳工具草稿</button>
+                        <button type="button" onClick={() => acceptCandidate(candidate, "news")}>采纳资讯草稿</button>
+                        <button type="button" className="danger" onClick={() => rejectCandidate(candidate)}>拒绝</button>
+                        <button type="button" className="danger ghost" onClick={() => remove("candidates", candidate.id)}>删除</button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+                {!shownCandidates.length ? <p className="empty-hint">暂无候选。可以运行采集脚本生成待审内容。</p> : null}
+              </div>
+            </SpotlightCard>
+          </section>
         )}
         <p className="form-message">{message}</p>
       </main>
@@ -1499,6 +1569,46 @@ function toolToForm(tool, categories) {
     galleryImages: splitLines(tool.galleryImages).join("\n"),
     faq: stringifyFaq(faq.length ? faq : defaultToolFaq(tool, category)),
     detailMarkdown: tool.detailMarkdown || "",
+  };
+}
+
+function candidateToToolForm(candidate) {
+  const title = candidate.name || candidate.title || "";
+  const tags = Array.isArray(candidate.tags) ? candidate.tags : splitLines(candidate.tags);
+  return {
+    ...emptyTool(),
+    id: "",
+    name: title,
+    url: candidate.url || candidate.sourceUrl || "",
+    logo: candidate.logo || "",
+    category: candidate.category || "chat",
+    status: "draft",
+    tags: tags.join(", "),
+    summary: candidate.summary || "",
+    detailMarkdown: candidate.detailMarkdown || `## ${title} 是什么？\n${candidate.summary || "这里补充工具定位、核心能力和适合人群。"}\n\n## 推荐理由\n${candidate.reason || "来自自动采集候选，建议人工确认后完善。"}\n\n## 来源\n[查看原始来源](${candidate.url || candidate.sourceUrl || "https://example.com"})`,
+    galleryImages: splitLines(candidate.galleryImages).join("\n"),
+    features: splitLines(candidate.features).join("\n"),
+    useCases: splitLines(candidate.useCases).join("\n"),
+    faq: stringifyFaq(candidate.faq),
+    featured: "false",
+    isNew: "true",
+  };
+}
+
+function candidateToNewsForm(candidate) {
+  return {
+    ...emptyNews(),
+    id: "",
+    title: candidate.title || candidate.name || "",
+    kind: candidate.kind || (candidate.type === "tool" ? "项目" : "资讯"),
+    publishedAt: new Date().toISOString().slice(0, 10),
+    sourceName: candidate.sourceName || "自动采集",
+    sourceUrl: candidate.sourceUrl || candidate.url || "",
+    coverImage: candidate.coverImage || "",
+    summary: candidate.summary || candidate.reason || "",
+    comments: 0,
+    likes: 0,
+    status: "draft",
   };
 }
 

@@ -114,10 +114,13 @@ class JsonStore:
         news = self.read().get("news", [])
         return news if include_drafts else [item for item in news if item.get("status", "published") == "published"]
 
+    def candidates(self):
+        return self.read().get("candidates", [])
+
     def create(self, collection, payload):
         data = self.read()
         items = data.setdefault(collection, [])
-        prefix = "tool" if collection == "tools" else "news"
+        prefix = {"tools": "tool", "news": "news", "candidates": "cand"}.get(collection, "item")
         payload["id"] = payload.get("id") or next_id(prefix, items)
         items.insert(0, payload)
         self.save(data)
@@ -178,6 +181,13 @@ class PostgresStore:
                         status text generated always as (coalesce(payload->>'status', 'published')) stored,
                         created_at timestamptz default now()
                     );
+                    create table if not exists deepfind_candidates (
+                        id text primary key,
+                        payload jsonb not null,
+                        status text generated always as (coalesce(payload->>'status', 'pending')) stored,
+                        type text generated always as (coalesce(payload->>'type', 'news')) stored,
+                        created_at timestamptz default now()
+                    );
                     """
                 )
                 cur.execute("select count(*) from deepfind_tools")
@@ -224,16 +234,21 @@ class PostgresStore:
             cur.execute(f"select payload from deepfind_news {where} order by created_at desc, id desc")
             return [row[0] for row in cur.fetchall()]
 
+    def candidates(self):
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute("select payload from deepfind_candidates order by created_at desc, id desc")
+            return [row[0] for row in cur.fetchall()]
+
     def create(self, collection, payload):
-        table = "deepfind_tools" if collection == "tools" else "deepfind_news"
-        prefix = "tool" if collection == "tools" else "news"
+        table = {"tools": "deepfind_tools", "news": "deepfind_news", "candidates": "deepfind_candidates"}[collection]
+        prefix = {"tools": "tool", "news": "news", "candidates": "cand"}[collection]
         payload["id"] = payload.get("id") or next_id(prefix)
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute(f"insert into {table} (id, payload) values (%s, %s)", (str(payload["id"]), Json(payload)))
         return payload
 
     def update(self, collection, item_id, payload):
-        table = "deepfind_tools" if collection == "tools" else "deepfind_news"
+        table = {"tools": "deepfind_tools", "news": "deepfind_news", "candidates": "deepfind_candidates"}[collection]
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute(f"select payload from {table} where id = %s", (str(item_id),))
             row = cur.fetchone()
@@ -244,14 +259,14 @@ class PostgresStore:
         return next_payload
 
     def delete(self, collection, item_id):
-        table = "deepfind_tools" if collection == "tools" else "deepfind_news"
+        table = {"tools": "deepfind_tools", "news": "deepfind_news", "candidates": "deepfind_candidates"}[collection]
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute(f"delete from {table} where id = %s", (str(item_id),))
             return cur.rowcount > 0
 
     def reset(self):
         with self.connect() as conn, conn.cursor() as cur:
-            cur.execute("truncate deepfind_tools, deepfind_news, deepfind_categories")
+            cur.execute("truncate deepfind_tools, deepfind_news, deepfind_candidates, deepfind_categories")
             self.seed(cur)
 
 
@@ -288,6 +303,15 @@ class MySqlStore:
                 cur.execute(
                     """
                     create table if not exists deepfind_news (
+                        id varchar(191) primary key,
+                        payload json not null,
+                        created_at timestamp default current_timestamp
+                    ) character set utf8mb4 collate utf8mb4_unicode_ci
+                    """
+                )
+                cur.execute(
+                    """
+                    create table if not exists deepfind_candidates (
                         id varchar(191) primary key,
                         payload json not null,
                         created_at timestamp default current_timestamp
@@ -345,9 +369,12 @@ class MySqlStore:
         news = self.read_payloads("deepfind_news")
         return news if include_drafts else [item for item in news if item.get("status", "published") == "published"]
 
+    def candidates(self):
+        return self.read_payloads("deepfind_candidates")
+
     def create(self, collection, payload):
-        table = "deepfind_tools" if collection == "tools" else "deepfind_news"
-        prefix = "tool" if collection == "tools" else "news"
+        table = {"tools": "deepfind_tools", "news": "deepfind_news", "candidates": "deepfind_candidates"}[collection]
+        prefix = {"tools": "tool", "news": "news", "candidates": "cand"}[collection]
         payload["id"] = payload.get("id") or next_id(prefix)
         with self.connect() as conn:
             with conn.cursor() as cur:
@@ -359,7 +386,7 @@ class MySqlStore:
         return payload
 
     def update(self, collection, item_id, payload):
-        table = "deepfind_tools" if collection == "tools" else "deepfind_news"
+        table = {"tools": "deepfind_tools", "news": "deepfind_news", "candidates": "deepfind_candidates"}[collection]
         with self.connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(f"select payload from {table} where id = %s", (str(item_id),))
@@ -376,7 +403,7 @@ class MySqlStore:
         return next_payload
 
     def delete(self, collection, item_id):
-        table = "deepfind_tools" if collection == "tools" else "deepfind_news"
+        table = {"tools": "deepfind_tools", "news": "deepfind_news", "candidates": "deepfind_candidates"}[collection]
         with self.connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(f"delete from {table} where id = %s", (str(item_id),))
@@ -389,6 +416,7 @@ class MySqlStore:
             with conn.cursor() as cur:
                 cur.execute("truncate table deepfind_tools")
                 cur.execute("truncate table deepfind_news")
+                cur.execute("truncate table deepfind_candidates")
                 cur.execute("truncate table deepfind_categories")
                 self.seed(cur)
             conn.commit()
@@ -788,6 +816,10 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/news":
             news = STORE.news(include_drafts=include_drafts)
             return self.send_json(news if include_drafts else public_news(news))
+        if parsed.path == "/api/candidates":
+            if not self.require_admin():
+                return
+            return self.send_json(STORE.candidates())
         if parsed.path == "/api/meta":
             return self.send_json({"store": STORE.name, "adminUser": ADMIN_USER})
         if parsed.path == "/api/session":
@@ -831,6 +863,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(STORE.create("tools", payload), 201)
         if parsed.path == "/api/news":
             return self.send_json(STORE.create("news", payload), 201)
+        if parsed.path == "/api/candidates":
+            payload.setdefault("status", "pending")
+            return self.send_json(STORE.create("candidates", payload), 201)
         if parsed.path == "/api/reset":
             STORE.reset()
             return self.send_json({"ok": True})
@@ -849,6 +884,9 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path.startswith("/api/news/"):
             item = STORE.update("news", parsed.path.rsplit("/", 1)[-1], payload)
             return self.send_json(item if item else {"error": "Not found"}, 200 if item else 404)
+        if parsed.path.startswith("/api/candidates/"):
+            item = STORE.update("candidates", parsed.path.rsplit("/", 1)[-1], payload)
+            return self.send_json(item if item else {"error": "Not found"}, 200 if item else 404)
 
         return self.send_json({"error": "Not found"}, 404)
 
@@ -862,6 +900,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({"ok": ok}, 200 if ok else 404)
         if parsed.path.startswith("/api/news/"):
             ok = STORE.delete("news", parsed.path.rsplit("/", 1)[-1])
+            return self.send_json({"ok": ok}, 200 if ok else 404)
+        if parsed.path.startswith("/api/candidates/"):
+            ok = STORE.delete("candidates", parsed.path.rsplit("/", 1)[-1])
             return self.send_json({"ok": ok}, 200 if ok else 404)
 
         return self.send_json({"error": "Not found"}, 404)
