@@ -1272,28 +1272,46 @@ function AdminPage() {
       featured: toolForm.featured === "true",
       isNew: toolForm.isNew === "true",
     };
-    await api.send(payload.id ? `/api/tools/${encodeURIComponent(payload.id)}` : "/api/tools", payload.id ? "PUT" : "POST", payload);
-    setMessage("工具已保存");
+    const createdFromCandidate = !payload.id && payload.sourceCandidateId;
+    const saved = await api.send(payload.id ? `/api/tools/${encodeURIComponent(payload.id)}` : "/api/tools", payload.id ? "PUT" : "POST", payload);
+    if (createdFromCandidate) {
+      await markCandidateAccepted(payload.sourceCandidateId, "tool", saved.id);
+    }
+    setMessage(createdFromCandidate ? `候选已审核并${payload.status === "draft" ? "保存为工具草稿" : "发布为工具"}` : "工具已保存");
     setToolForm(emptyTool());
     await reload();
   }
 
   async function saveNews(event) {
     event.preventDefault();
-    await api.send(newsForm.id ? `/api/news/${encodeURIComponent(newsForm.id)}` : "/api/news", newsForm.id ? "PUT" : "POST", newsForm);
-    setMessage("资讯已保存");
+    const createdFromCandidate = !newsForm.id && newsForm.sourceCandidateId;
+    const saved = await api.send(newsForm.id ? `/api/news/${encodeURIComponent(newsForm.id)}` : "/api/news", newsForm.id ? "PUT" : "POST", newsForm);
+    if (createdFromCandidate) {
+      await markCandidateAccepted(newsForm.sourceCandidateId, "news", saved.id);
+    }
+    setMessage(createdFromCandidate ? `候选已审核并${newsForm.status === "draft" ? "保存为资讯草稿" : "发布为每日资讯"}` : "资讯已保存");
     setNewsForm(emptyNews());
     await reload();
   }
 
+  async function markCandidateAccepted(candidateId, acceptedAs, acceptedItemId) {
+    await api.send(`/api/candidates/${encodeURIComponent(candidateId)}`, "PUT", {
+      status: "accepted",
+      acceptedAs,
+      acceptedItemId,
+      acceptedAt: new Date().toISOString(),
+    });
+  }
+
   async function acceptCandidate(candidate, targetType = candidate.type || "news") {
+    let created;
     if (targetType === "tool") {
-      await api.send("/api/tools", "POST", candidateToToolForm(candidate));
+      created = await api.send("/api/tools", "POST", { ...candidateToToolForm(candidate), status: "published" });
     } else {
-      await api.send("/api/news", "POST", candidateToNewsForm(candidate));
+      created = await api.send("/api/news", "POST", { ...candidateToNewsForm(candidate), status: "published" });
     }
-    await api.send(`/api/candidates/${encodeURIComponent(candidate.id)}`, "PUT", { status: "accepted", acceptedAs: targetType, acceptedAt: new Date().toISOString() });
-    setMessage(`候选已采纳为${targetType === "tool" ? "工具草稿" : "资讯草稿"}`);
+    await markCandidateAccepted(candidate.id, targetType, created.id);
+    setMessage(`候选已通过并发布为${targetType === "tool" ? "工具" : "每日资讯"}`);
     await reload();
   }
 
@@ -1544,11 +1562,19 @@ function AdminPage() {
                       <small>{candidate.sourceName || "自动采集"} · {candidate.reason || "待人工确认"}</small>
                       <div className="candidate-actions">
                         {candidate.url || candidate.sourceUrl ? <a href={candidate.url || candidate.sourceUrl} target="_blank" rel="noopener noreferrer">查看来源</a> : null}
-                        <button type="button" onClick={() => { setToolForm(candidateToToolForm(candidate)); setActiveAdminSection("tools"); }}>编辑为工具</button>
-                        <button type="button" onClick={() => { setNewsForm(candidateToNewsForm(candidate)); setActiveAdminSection("news"); }}>编辑为资讯</button>
-                        <button type="button" onClick={() => acceptCandidate(candidate, "tool")}>采纳工具草稿</button>
-                        <button type="button" onClick={() => acceptCandidate(candidate, "news")}>采纳资讯草稿</button>
-                        <button type="button" className="danger" onClick={() => rejectCandidate(candidate)}>拒绝</button>
+                        {(candidate.status || "pending") === "pending" ? (
+                          <>
+                            <button type="button" onClick={() => { setToolForm(candidateToToolForm(candidate)); setActiveAdminSection("tools"); }}>编辑为工具</button>
+                            <button type="button" onClick={() => { setNewsForm(candidateToNewsForm(candidate)); setActiveAdminSection("news"); }}>编辑为资讯</button>
+                            <button type="button" onClick={() => acceptCandidate(candidate, "tool")}>通过并发布工具</button>
+                            <button type="button" onClick={() => acceptCandidate(candidate, "news")}>通过并发布资讯</button>
+                            <button type="button" className="danger" onClick={() => rejectCandidate(candidate)}>拒绝</button>
+                          </>
+                        ) : (
+                          <span className="candidate-result">
+                            {candidate.status === "accepted" ? `已发布为${candidate.acceptedAs === "tool" ? "工具" : "资讯"}` : "已拒绝"}
+                          </span>
+                        )}
                         <button type="button" className="danger ghost" onClick={() => remove("candidates", candidate.id)}>删除</button>
                       </div>
                     </div>
@@ -1590,11 +1616,12 @@ function candidateToToolForm(candidate) {
   return {
     ...emptyTool(),
     id: "",
+    sourceCandidateId: candidate.id || "",
     name: title,
     url: candidate.url || candidate.sourceUrl || "",
     logo: candidate.logo || "",
     category: candidate.category || "chat",
-    status: "draft",
+    status: "published",
     tags: tags.join(", "),
     summary: candidate.summary || "",
     detailMarkdown: candidate.detailMarkdown || `## ${title} 是什么？\n${candidate.summary || "这里补充工具定位、核心能力和适合人群。"}\n\n## 推荐理由\n${candidate.reason || "来自自动采集候选，建议人工确认后完善。"}\n\n## 来源\n[查看原始来源](${candidate.url || candidate.sourceUrl || "https://example.com"})`,
@@ -1611,6 +1638,7 @@ function candidateToNewsForm(candidate) {
   return {
     ...emptyNews(),
     id: "",
+    sourceCandidateId: candidate.id || "",
     title: candidate.title || candidate.name || "",
     kind: candidate.kind || (candidate.type === "tool" ? "项目" : "资讯"),
     publishedAt: candidate.publishedAt || new Date().toISOString().slice(0, 10),
@@ -1620,7 +1648,7 @@ function candidateToNewsForm(candidate) {
     summary: candidate.summary || candidate.reason || "",
     comments: 0,
     likes: 0,
-    status: "draft",
+    status: "published",
   };
 }
 
@@ -1637,6 +1665,7 @@ function AdminRow({ item, meta, onEdit, onDelete }) {
 function emptyTool() {
   return {
     id: "",
+    sourceCandidateId: "",
     name: "",
     url: "",
     logo: "",
@@ -1657,6 +1686,7 @@ function emptyTool() {
 function emptyNews() {
   return {
     id: "",
+    sourceCandidateId: "",
     title: "",
     kind: "资讯",
     publishedAt: new Date().toISOString().slice(0, 10),

@@ -2715,6 +2715,18 @@ body {
   background: #f3f5f9;
 }
 
+.candidate-result {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: #18794e;
+  background: #eaf8f1;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .empty-hint {
   border: 1px dashed #dbe3f0;
   border-radius: 14px;
