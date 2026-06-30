@@ -55,6 +55,18 @@ def next_id(prefix, items=None):
     return f"{prefix}-{int(time.time() * 1000)}-{count + 1}"
 
 
+def sort_news(items):
+    return sorted(
+        items,
+        key=lambda item: (
+            str(item.get("publishedAt") or ""),
+            str(item.get("createdAt") or ""),
+            str(item.get("id") or ""),
+        ),
+        reverse=True,
+    )
+
+
 def db_config():
     return {
         "dbname": os.environ.get("DB_NAME", "adops_db"),
@@ -112,7 +124,8 @@ class JsonStore:
 
     def news(self, include_drafts=False):
         news = self.read().get("news", [])
-        return news if include_drafts else [item for item in news if item.get("status", "published") == "published"]
+        visible = news if include_drafts else [item for item in news if item.get("status", "published") == "published"]
+        return sort_news(visible)
 
     def candidates(self):
         return self.read().get("candidates", [])
@@ -232,7 +245,7 @@ class PostgresStore:
         where = "" if include_drafts else "where status = 'published'"
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute(f"select payload from deepfind_news {where} order by created_at desc, id desc")
-            return [row[0] for row in cur.fetchall()]
+            return sort_news([row[0] for row in cur.fetchall()])
 
     def candidates(self):
         with self.connect() as conn, conn.cursor() as cur:
@@ -367,7 +380,8 @@ class MySqlStore:
 
     def news(self, include_drafts=False):
         news = self.read_payloads("deepfind_news")
-        return news if include_drafts else [item for item in news if item.get("status", "published") == "published"]
+        visible = news if include_drafts else [item for item in news if item.get("status", "published") == "published"]
+        return sort_news(visible)
 
     def candidates(self):
         return self.read_payloads("deepfind_candidates")

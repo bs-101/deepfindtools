@@ -105,7 +105,7 @@ services:
       DB_PORT: ${DB_PORT:-3306}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://ai.deepfindtools.com}
       CANDIDATE_LIMIT: ${CANDIDATE_LIMIT:-12}
-      COLLECT_INTERVAL_SECONDS: ${COLLECT_INTERVAL_SECONDS:-21600}
+      COLLECT_INTERVAL_SECONDS: ${COLLECT_INTERVAL_SECONDS:-3600}
       PRODUCT_HUNT_TOKEN: ${PRODUCT_HUNT_TOKEN:-}
     command: ["python", "scripts/collect_candidates.py", "--loop"]
 

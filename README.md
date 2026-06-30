@@ -182,15 +182,15 @@ docker compose --profile automation up -d --build collector
 docker compose -f docker-compose.cloudflare.yml --profile automation up -d --build collector
 ```
 
-默认每 6 小时采集一次，可通过 `.env` 调整：
+默认每小时采集一次，可通过 `.env` 调整：
 
 ```bash
 CANDIDATE_LIMIT=12
-COLLECT_INTERVAL_SECONDS=21600
+COLLECT_INTERVAL_SECONDS=3600
 PRODUCT_HUNT_TOKEN=
 ```
 
-当前采集源包括 GitHub、Hacker News、arXiv；配置 `PRODUCT_HUNT_TOKEN` 后会额外启用 Product Hunt。后台审核候选时，可以选择编辑为工具、编辑为资讯、采纳为草稿或拒绝。
+国内资讯优先采集量子位官方 RSS、36氪 AI 频道、InfoQ 中文和 IT之家；36氪 AI 频道也会汇集机器之心、新智元等头部媒体内容。GitHub、Hacker News、arXiv 作为工具、海外资讯和论文补充源；配置 `PRODUCT_HUNT_TOKEN` 后会额外启用 Product Hunt。每轮最多入队 `CANDIDATE_LIMIT` 条，所有内容只进入后台候选审核，不会自动发布。
 
 ### 数据持久化
 
@@ -427,11 +427,11 @@ Configure cadence in `.env`:
 
 ```bash
 CANDIDATE_LIMIT=12
-COLLECT_INTERVAL_SECONDS=21600
+COLLECT_INTERVAL_SECONDS=3600
 PRODUCT_HUNT_TOKEN=
 ```
 
-Current sources include GitHub, Hacker News, and arXiv. Product Hunt is enabled when `PRODUCT_HUNT_TOKEN` is provided. In the admin console, each candidate can be edited as a tool, edited as news, accepted as a draft, or rejected.
+Chinese sources are prioritized: QbitAI's official RSS, the 36Kr AI channel, InfoQ China, and ITHome. The 36Kr AI channel also aggregates publishers such as Synced and AI Era. GitHub, Hacker News, and arXiv remain as supplementary tool, international news, and research sources. Product Hunt is enabled when `PRODUCT_HUNT_TOKEN` is provided. Each run adds at most `CANDIDATE_LIMIT` review items and never publishes automatically.
 
 ### Data Persistence
 

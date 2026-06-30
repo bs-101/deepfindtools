@@ -322,6 +322,14 @@ function sortAndFilterTools(tools, categories, query, sort = "featured") {
     });
 }
 
+function sortNewsByDate(items) {
+  return [...items].sort((a, b) => {
+    const aTime = Date.parse(a.publishedAt || a.createdAt || "") || 0;
+    const bTime = Date.parse(b.publishedAt || b.createdAt || "") || 0;
+    return bTime - aTime || String(b.id || "").localeCompare(String(a.id || ""));
+  });
+}
+
 function toolDetailHref(tool) {
   return tool?.detailUrl || (tool?.id ? `/sites/${encodeURIComponent(tool.id)}.html` : tool?.url || "#");
 }
@@ -681,7 +689,9 @@ function HomePage({ initialData = null } = {}) {
   }
 
   const sortedTools = useMemo(() => sortAndFilterTools(tools, categories, query, sort), [tools, categories, query, sort]);
-  const filteredNews = news.filter((item) => item.status !== "draft" && (newsFilter === "all" || item.kind === newsFilter));
+  const filteredNews = sortNewsByDate(
+    news.filter((item) => item.status !== "draft" && (newsFilter === "all" || item.kind === newsFilter)),
+  );
   const featuredTools = tools.filter((tool) => tool.featured).slice(0, 12);
   const latestTools = tools.filter((tool) => tool.isNew).slice(0, 12);
   const homeSections = categories.filter((item) => tools.some((tool) => tool.category === item.id));
@@ -850,7 +860,7 @@ function CategoryPage({ categoryId, initialData = null }) {
 function DailyNewsPage({ initialData = null } = {}) {
   const { tools, categories, news } = useData(false, initialData);
   const [query, setQuery] = useState("");
-  const publishedNews = news.filter((item) => item.status !== "draft");
+  const publishedNews = sortNewsByDate(news.filter((item) => item.status !== "draft"));
   const introArticle = publishedNews.find((item) => item.title?.includes("每日AI快讯"));
   const dailyIntro =
     introArticle?.summary ||
@@ -947,7 +957,7 @@ function DailyNewsPage({ initialData = null } = {}) {
 
 function groupNewsByDate(items) {
   const groups = new Map();
-  items.forEach((item) => {
+  sortNewsByDate(items).forEach((item) => {
     const label = item.dayLabel || formatDateLabel(item.publishedAt);
     if (!groups.has(label)) groups.set(label, []);
     groups.get(label).push(item);
@@ -1304,7 +1314,9 @@ function AdminPage() {
   }
 
   const shownTools = tools.filter((tool) => [tool.name, tool.summary, tool.detailMarkdown, categoryName(categories, tool.category)].join(" ").toLowerCase().includes(toolQuery.toLowerCase()));
-  const shownNews = news.filter((item) => [item.title, item.summary, item.kind, item.sourceName].join(" ").toLowerCase().includes(newsQuery.toLowerCase()));
+  const shownNews = sortNewsByDate(
+    news.filter((item) => [item.title, item.summary, item.kind, item.sourceName].join(" ").toLowerCase().includes(newsQuery.toLowerCase())),
+  );
   const shownCandidates = candidates
     .filter((item) => [item.title, item.name, item.summary, item.sourceName, item.reason, item.type, item.status].join(" ").toLowerCase().includes(candidateQuery.toLowerCase()))
     .sort((a, b) => {
@@ -1601,7 +1613,7 @@ function candidateToNewsForm(candidate) {
     id: "",
     title: candidate.title || candidate.name || "",
     kind: candidate.kind || (candidate.type === "tool" ? "项目" : "资讯"),
-    publishedAt: new Date().toISOString().slice(0, 10),
+    publishedAt: candidate.publishedAt || new Date().toISOString().slice(0, 10),
     sourceName: candidate.sourceName || "自动采集",
     sourceUrl: candidate.sourceUrl || candidate.url || "",
     coverImage: candidate.coverImage || "",

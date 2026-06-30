@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
+from html import unescape
+from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import quote_plus, urljoin, urlparse
 from urllib.request import Request, urlopen
 import argparse
 import hashlib
@@ -34,6 +37,44 @@ CATEGORY_RULES = [
     ("search", ["search", "research", "browser", "answer engine"]),
 ]
 
+AI_KEYWORDS = [
+    "AI",
+    "人工智能",
+    "大模型",
+    "生成式",
+    "智能体",
+    "机器学习",
+    "深度学习",
+    "多模态",
+    "具身智能",
+    "神经网络",
+    "模型",
+    "算力",
+    "机器人",
+    "自动驾驶",
+]
+
+DOMESTIC_RSS_SOURCES = [
+    {
+        "name": "量子位",
+        "url": "https://www.qbitai.com/feed",
+        "filter_ai": False,
+        "score": 88,
+    },
+    {
+        "name": "InfoQ 中文",
+        "url": "https://www.infoq.cn/feed",
+        "filter_ai": True,
+        "score": 78,
+    },
+    {
+        "name": "IT之家",
+        "url": "https://www.ithome.com/rss/",
+        "filter_ai": True,
+        "score": 76,
+    },
+]
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -54,6 +95,36 @@ def http_text(url: str, headers: dict[str, str] | None = None, timeout: int = 18
 def compact_text(value: str, limit: int = 180) -> str:
     text = re.sub(r"\s+", " ", value or "").strip()
     return text[: limit - 1] + "…" if len(text) > limit else text
+
+
+def clean_html_text(value: str, limit: int = 260) -> str:
+    text = re.sub(r"<[^>]+>", " ", unescape(value or ""))
+    return compact_text(text, limit)
+
+
+def is_ai_related(title: str, summary: str = "") -> bool:
+    haystack = f"{title} {summary}"
+    lower = haystack.lower()
+    return any(keyword in haystack for keyword in AI_KEYWORDS) or bool(
+        re.search(r"\b(ai|aigc|agi|llm|agent|gpt|claude|gemini|deepseek|qwen|openai|anthropic)\b", lower)
+    )
+
+
+def parse_published_at(value: str) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return datetime.now().date().isoformat()
+    try:
+        parsed = parsedate_to_datetime(raw)
+    except (TypeError, ValueError, OverflowError):
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            match = re.search(r"(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})", raw)
+            if match:
+                return f"{int(match.group(1)):04d}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
+            return datetime.now().date().isoformat()
+    return parsed.date().isoformat()
 
 
 def normalize_url(value: str) -> str:
@@ -112,6 +183,139 @@ def make_candidate(candidate_type: str, source_name: str, title: str, summary: s
         "createdAt": now_iso(),
         **extra,
     }
+
+
+def feed_value(entry: ET.Element, names: set[str]) -> str:
+    for node in entry.iter():
+        local_name = node.tag.rsplit("}", 1)[-1].lower()
+        if local_name in names:
+            if local_name == "link" and node.attrib.get("href"):
+                rel = node.attrib.get("rel", "alternate")
+                if rel in {"alternate", ""}:
+                    return node.attrib["href"]
+            text = "".join(node.itertext()).strip()
+            if text:
+                return text
+    return ""
+
+
+def collect_feed_source(source: dict, limit: int) -> list[dict]:
+    root = ET.fromstring(http_text(source["url"], headers={"Accept": "application/rss+xml, application/atom+xml, text/xml"}))
+    entries = [node for node in root.iter() if node.tag.rsplit("}", 1)[-1].lower() in {"item", "entry"}]
+    candidates = []
+    for entry in entries:
+        title = clean_html_text(feed_value(entry, {"title"}), 100)
+        summary = clean_html_text(feed_value(entry, {"description", "summary", "content", "encoded"}), 260)
+        link = feed_value(entry, {"link", "id", "guid"})
+        published_at = parse_published_at(feed_value(entry, {"pubdate", "published", "updated", "date"}))
+        if not title or not link:
+            continue
+        if source.get("filter_ai") and not is_ai_related(title, summary):
+            continue
+        candidates.append(
+            make_candidate(
+                "news",
+                source["name"],
+                title,
+                summary or title,
+                link,
+                kind="资讯",
+                publishedAt=published_at,
+                score=source["score"],
+                reason=f"{source['name']} 官方公开信息源，等待人工核对后发布。",
+            )
+        )
+        if len(candidates) >= limit:
+            break
+    return candidates
+
+
+def collect_domestic_feeds(limit: int) -> list[dict]:
+    per_source = max(3, (limit + len(DOMESTIC_RSS_SOURCES) - 1) // len(DOMESTIC_RSS_SOURCES))
+    candidates = []
+    for source in DOMESTIC_RSS_SOURCES:
+        try:
+            found = collect_feed_source(source, per_source)
+            print(f"  {source['name']}: {len(found)} candidates")
+            candidates.extend(found)
+        except Exception as exc:
+            print(f"  {source['name']} failed: {exc}")
+    return candidates
+
+
+class KrAiParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.items: dict[str, dict] = {}
+        self.last_href = ""
+        self.capture: tuple[str, str, str] | None = None
+
+    def handle_starttag(self, tag, attrs):
+        values = dict(attrs)
+        classes = set(values.get("class", "").split())
+        if tag == "a" and "article-item-title" in classes:
+            href = urljoin("https://www.36kr.com", values.get("href", ""))
+            self.last_href = href
+            self.items.setdefault(href, {"url": href})
+            self.capture = ("a", "title", href)
+        elif tag == "a" and "article-item-description" in classes and self.last_href:
+            self.capture = ("a", "summary", self.last_href)
+        elif tag == "a" and "kr-flow-bar-author" in classes and self.last_href:
+            self.capture = ("a", "author", self.last_href)
+        elif tag == "span" and "kr-flow-bar-time" in classes and self.last_href:
+            self.capture = ("span", "time", self.last_href)
+
+    def handle_data(self, data):
+        if not self.capture:
+            return
+        _, key, href = self.capture
+        item = self.items.setdefault(href, {"url": href})
+        item[key] = f"{item.get(key, '')} {data}".strip()
+
+    def handle_endtag(self, tag):
+        if self.capture and self.capture[0] == tag:
+            self.capture = None
+
+
+def relative_cn_date(value: str) -> str:
+    today = datetime.now().date()
+    match = re.search(r"(\d+)\s*天前", value or "")
+    if match:
+        return (today - timedelta(days=int(match.group(1)))).isoformat()
+    if "昨天" in (value or ""):
+        return (today - timedelta(days=1)).isoformat()
+    match = re.search(r"(\d{1,2})[-月](\d{1,2})", value or "")
+    if match:
+        return f"{today.year:04d}-{int(match.group(1)):02d}-{int(match.group(2)):02d}"
+    return today.isoformat()
+
+
+def collect_36kr_ai(limit: int) -> list[dict]:
+    parser = KrAiParser()
+    parser.feed(http_text("https://www.36kr.com/information/AI/", headers={"Accept": "text/html"}))
+    candidates = []
+    for item in parser.items.values():
+        title = compact_text(item.get("title", ""), 100)
+        if not title:
+            continue
+        source_name = compact_text(item.get("author", ""), 40) or "36氪 AI"
+        summary = compact_text(item.get("summary", "") or title, 260)
+        candidates.append(
+            make_candidate(
+                "news",
+                source_name,
+                title,
+                summary,
+                item["url"],
+                kind="资讯",
+                publishedAt=relative_cn_date(item.get("time", "")),
+                score=84 if source_name in {"量子位", "机器之心", "新智元"} else 80,
+                reason=f"来自 36氪 AI 频道收录的 {source_name} 内容，等待人工核对后发布。",
+            )
+        )
+        if len(candidates) >= limit:
+            break
+    return candidates
 
 
 def collect_github(limit: int) -> list[dict]:
@@ -264,7 +468,14 @@ def is_duplicate(candidate: dict, fingerprints: set[str]) -> bool:
 
 
 def collect_once(limit: int) -> int:
-    collectors = [collect_github, collect_hacker_news, collect_arxiv, collect_product_hunt]
+    collectors = [
+        collect_domestic_feeds,
+        collect_36kr_ai,
+        collect_github,
+        collect_hacker_news,
+        collect_arxiv,
+        collect_product_hunt,
+    ]
     candidates = []
     for collector in collectors:
         try:
@@ -277,6 +488,8 @@ def collect_once(limit: int) -> int:
     fingerprints = existing_fingerprints()
     inserted = 0
     for candidate in sorted(candidates, key=lambda item: item.get("score", 0), reverse=True):
+        if inserted >= limit:
+            break
         if is_duplicate(candidate, fingerprints):
             continue
         STORE.create("candidates", candidate)
@@ -293,7 +506,7 @@ def main():
     parser = argparse.ArgumentParser(description="Collect AI tool/news candidates for manual review.")
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
     parser.add_argument("--loop", action="store_true")
-    parser.add_argument("--interval", type=int, default=int(os.environ.get("COLLECT_INTERVAL_SECONDS", "21600")))
+    parser.add_argument("--interval", type=int, default=int(os.environ.get("COLLECT_INTERVAL_SECONDS", "3600")))
     args = parser.parse_args()
 
     while True:
