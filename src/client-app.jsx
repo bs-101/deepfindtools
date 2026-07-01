@@ -1238,6 +1238,8 @@ function AdminPage() {
   const [toolQuery, setToolQuery] = useState("");
   const [newsQuery, setNewsQuery] = useState("");
   const [candidateQuery, setCandidateQuery] = useState("");
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState([]);
+  const [bulkCandidateBusy, setBulkCandidateBusy] = useState(false);
   const [toolForm, setToolForm] = useState(emptyTool());
   const [newsForm, setNewsForm] = useState(emptyNews());
   const [message, setMessage] = useState("");
@@ -1303,7 +1305,7 @@ function AdminPage() {
     });
   }
 
-  async function acceptCandidate(candidate, targetType = candidate.type || "news") {
+  async function publishCandidate(candidate, targetType = candidate.type || "news") {
     let created;
     if (targetType === "tool") {
       created = await api.send("/api/tools", "POST", { ...candidateToToolForm(candidate), status: "published" });
@@ -1311,6 +1313,11 @@ function AdminPage() {
       created = await api.send("/api/news", "POST", { ...candidateToNewsForm(candidate), status: "published" });
     }
     await markCandidateAccepted(candidate.id, targetType, created.id);
+    return created;
+  }
+
+  async function acceptCandidate(candidate, targetType = candidate.type || "news") {
+    await publishCandidate(candidate, targetType);
     setMessage(`候选已通过并发布为${targetType === "tool" ? "工具" : "每日资讯"}`);
     await reload();
   }
@@ -1319,6 +1326,91 @@ function AdminPage() {
     await api.send(`/api/candidates/${encodeURIComponent(candidate.id)}`, "PUT", { status: "rejected", rejectedAt: new Date().toISOString() });
     setMessage("候选已拒绝");
     await reload();
+  }
+
+  function toggleCandidateSelection(candidateId) {
+    setSelectedCandidateIds((current) => (
+      current.includes(candidateId)
+        ? current.filter((id) => id !== candidateId)
+        : [...current, candidateId]
+    ));
+  }
+
+  function toggleVisibleCandidates(visibleCandidates) {
+    const visibleIds = visibleCandidates.map((candidate) => candidate.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedCandidateIds.includes(id));
+    setSelectedCandidateIds((current) => (
+      allSelected
+        ? current.filter((id) => !visibleIds.includes(id))
+        : Array.from(new Set([...current, ...visibleIds]))
+    ));
+  }
+
+  async function bulkAcceptCandidates(selectedCandidates) {
+    const pending = selectedCandidates.filter((candidate) => (candidate.status || "pending") === "pending");
+    if (!pending.length || !window.confirm(`确认通过并发布选中的 ${pending.length} 条待审候选？工具候选会进入工具库，资讯候选会进入每日资讯。`)) return;
+    setBulkCandidateBusy(true);
+    setMessage(`正在批量发布 0 / ${pending.length}...`);
+    let completed = 0;
+    try {
+      for (const candidate of pending) {
+        await publishCandidate(candidate, candidate.type === "tool" ? "tool" : "news");
+        completed += 1;
+        setMessage(`正在批量发布 ${completed} / ${pending.length}...`);
+      }
+      setSelectedCandidateIds((current) => current.filter((id) => !pending.some((candidate) => candidate.id === id)));
+      setMessage(`已通过并发布 ${completed} 条候选`);
+      await reload();
+    } catch (error) {
+      setMessage(`批量发布在 ${completed} / ${pending.length} 处中断：${error.message}`);
+      await reload();
+    } finally {
+      setBulkCandidateBusy(false);
+    }
+  }
+
+  async function bulkRejectCandidates(selectedCandidates) {
+    const pending = selectedCandidates.filter((candidate) => (candidate.status || "pending") === "pending");
+    if (!pending.length || !window.confirm(`确认拒绝选中的 ${pending.length} 条待审候选？`)) return;
+    setBulkCandidateBusy(true);
+    let completed = 0;
+    try {
+      for (const candidate of pending) {
+        await api.send(`/api/candidates/${encodeURIComponent(candidate.id)}`, "PUT", {
+          status: "rejected",
+          rejectedAt: new Date().toISOString(),
+        });
+        completed += 1;
+      }
+      setSelectedCandidateIds((current) => current.filter((id) => !pending.some((candidate) => candidate.id === id)));
+      setMessage(`已拒绝 ${completed} 条候选`);
+      await reload();
+    } catch (error) {
+      setMessage(`批量拒绝在 ${completed} / ${pending.length} 处中断：${error.message}`);
+      await reload();
+    } finally {
+      setBulkCandidateBusy(false);
+    }
+  }
+
+  async function bulkDeleteCandidates(selectedCandidates) {
+    if (!selectedCandidates.length || !window.confirm(`确认永久删除选中的 ${selectedCandidates.length} 条候选？此操作不会删除已经生成的工具或资讯。`)) return;
+    setBulkCandidateBusy(true);
+    let completed = 0;
+    try {
+      for (const candidate of selectedCandidates) {
+        await api.send(`/api/candidates/${encodeURIComponent(candidate.id)}`, "DELETE", {});
+        completed += 1;
+      }
+      setSelectedCandidateIds([]);
+      setMessage(`已删除 ${completed} 条候选记录`);
+      await reload();
+    } catch (error) {
+      setMessage(`批量删除在 ${completed} / ${selectedCandidates.length} 处中断：${error.message}`);
+      await reload();
+    } finally {
+      setBulkCandidateBusy(false);
+    }
   }
 
   async function remove(collection, id) {
@@ -1341,6 +1433,9 @@ function AdminPage() {
       const statusRank = { pending: 0, accepted: 1, rejected: 2 };
       return (statusRank[a.status] ?? 3) - (statusRank[b.status] ?? 3) || Number(b.score || 0) - Number(a.score || 0);
     });
+  const selectedCandidates = candidates.filter((candidate) => selectedCandidateIds.includes(candidate.id));
+  const selectedPendingCandidates = selectedCandidates.filter((candidate) => (candidate.status || "pending") === "pending");
+  const allShownCandidatesSelected = shownCandidates.length > 0 && shownCandidates.every((candidate) => selectedCandidateIds.includes(candidate.id));
   const pendingCandidates = candidates.filter((item) => (item.status || "pending") === "pending");
 
   if (loading) return <main className="loading-screen">正在打开后台...</main>;
@@ -1546,9 +1641,57 @@ function AdminPage() {
                 </div>
                 <input value={candidateQuery} onChange={(e) => setCandidateQuery(e.target.value)} placeholder="搜索标题、来源、状态或推荐理由" />
               </div>
+              <div className="candidate-bulkbar">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={allShownCandidatesSelected}
+                    onChange={() => toggleVisibleCandidates(shownCandidates)}
+                    disabled={!shownCandidates.length || bulkCandidateBusy}
+                  />
+                  <span>选择当前结果</span>
+                </label>
+                <strong>已选 {selectedCandidates.length} 项</strong>
+                <div className="candidate-bulk-actions">
+                  <button
+                    type="button"
+                    onClick={() => bulkAcceptCandidates(selectedCandidates)}
+                    disabled={!selectedPendingCandidates.length || bulkCandidateBusy}
+                  >
+                    批量通过并发布
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => bulkRejectCandidates(selectedCandidates)}
+                    disabled={!selectedPendingCandidates.length || bulkCandidateBusy}
+                  >
+                    批量拒绝
+                  </button>
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={() => bulkDeleteCandidates(selectedCandidates)}
+                    disabled={!selectedCandidates.length || bulkCandidateBusy}
+                  >
+                    批量删除
+                  </button>
+                  <button type="button" onClick={() => setSelectedCandidateIds([])} disabled={!selectedCandidates.length || bulkCandidateBusy}>
+                    清空选择
+                  </button>
+                </div>
+              </div>
               <div className="candidate-list">
                 {shownCandidates.map((candidate) => (
                   <article className={`candidate-card status-${candidate.status || "pending"}`} key={candidate.id}>
+                    <label className="candidate-select">
+                      <input
+                        type="checkbox"
+                        checked={selectedCandidateIds.includes(candidate.id)}
+                        onChange={() => toggleCandidateSelection(candidate.id)}
+                        disabled={bulkCandidateBusy}
+                        aria-label={`选择候选：${candidate.title || candidate.name}`}
+                      />
+                    </label>
                     <div className="candidate-score">
                       <strong>{candidate.score || 60}</strong>
                       <span>{candidate.type === "tool" ? "工具" : "资讯"}</span>
