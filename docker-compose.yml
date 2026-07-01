@@ -95,9 +95,9 @@ services:
       RSS_ADD_COVER: "True"
       RSS_PAGE_SIZE: 100
       MAX_PAGE: 3
-      GATHER.CONTENT: "True"
+      GATHER.CONTENT: "False"
       GATHER.MODEL: web
-      GATHER.CONTENT_AUTO_CHECK: "True"
+      GATHER.CONTENT_AUTO_CHECK: "False"
       REDIS_SERVER_ENABLED: "True"
       TZ: ${TZ:-Asia/Shanghai}
     ports:
