@@ -243,6 +243,56 @@ def collect_domestic_feeds(limit: int) -> list[dict]:
     return candidates
 
 
+def collect_wechat_feeds(limit: int) -> list[dict]:
+    feed_url = os.environ.get("WECHAT_RSS_URL", "").strip()
+    if not feed_url:
+        return []
+
+    allowlist = {
+        item.strip().lower()
+        for item in os.environ.get("WECHAT_ACCOUNT_ALLOWLIST", "").split(",")
+        if item.strip()
+    }
+    data = http_json(feed_url)
+    items = data.get("items", []) if isinstance(data, dict) else data
+    candidates = []
+
+    for item in items:
+        feed = item.get("feed") or {}
+        source_name = compact_text(
+            item.get("channel_name") or feed.get("name") or "微信公众号",
+            40,
+        )
+        if allowlist and source_name.lower() not in allowlist:
+            continue
+        title = clean_html_text(item.get("title", ""), 100)
+        summary = clean_html_text(
+            item.get("description") or item.get("content") or title,
+            260,
+        )
+        link = item.get("link") or ""
+        if not title or not link:
+            continue
+        candidates.append(
+            make_candidate(
+                "news",
+                source_name,
+                title,
+                summary,
+                link,
+                kind="资讯",
+                publishedAt=parse_published_at(str(item.get("updated") or "")),
+                score=92,
+                reason=f"来自微信公众号「{source_name}」的最新文章，等待人工核对后发布。",
+                tags=["微信公众号"],
+            )
+        )
+        if len(candidates) >= limit:
+            break
+
+    return candidates
+
+
 class KrAiParser(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -469,6 +519,7 @@ def is_duplicate(candidate: dict, fingerprints: set[str]) -> bool:
 
 def collect_once(limit: int) -> int:
     collectors = [
+        collect_wechat_feeds,
         collect_domestic_feeds,
         collect_36kr_ai,
         collect_github,

@@ -85,6 +85,36 @@ services:
     profiles:
       - tunnel
 
+  we-mp-rss:
+    image: ghcr.io/rachelos/we-mp-rss:latest
+    container_name: deepfindtools-local-we-mp-rss
+    restart: unless-stopped
+    profiles:
+      - wechat
+    environment:
+      PORT: 8001
+      USERNAME: ${WECHAT_RSS_USER:-admin}
+      PASSWORD: ${WECHAT_RSS_PASSWORD:-change_this_wechat_rss_password}
+      SECRET_KEY: ${WECHAT_RSS_SECRET_KEY:-change_this_long_random_secret}
+      ENABLE_JOB: "True"
+      WERSS_AUTH_WEB: "True"
+      DB: sqlite:///./data/db.db
+      RSS_BASE_URL: http://we-mp-rss:8001/
+      RSS_LOCAL: "False"
+      RSS_FULL_CONTEXT: "False"
+      RSS_ADD_COVER: "True"
+      RSS_PAGE_SIZE: 100
+      MAX_PAGE: 3
+      GATHER.CONTENT: "True"
+      GATHER.MODEL: web
+      GATHER.CONTENT_AUTO_CHECK: "True"
+      REDIS_SERVER_ENABLED: "True"
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "127.0.0.1:${WECHAT_RSS_PORT:-8001}:8001"
+    volumes:
+      - wechat_rss_data:/app/data
+
   collector:
     build:
       context: .
@@ -107,8 +137,11 @@ services:
       CANDIDATE_LIMIT: ${CANDIDATE_LIMIT:-12}
       COLLECT_INTERVAL_SECONDS: ${COLLECT_INTERVAL_SECONDS:-3600}
       PRODUCT_HUNT_TOKEN: ${PRODUCT_HUNT_TOKEN:-}
+      WECHAT_RSS_URL: ${WECHAT_RSS_URL:-http://we-mp-rss:8001/feed/all.json?limit=100}
+      WECHAT_ACCOUNT_ALLOWLIST: ${WECHAT_ACCOUNT_ALLOWLIST:-}
     command: ["python", "scripts/collect_candidates.py", "--loop"]
 
 volumes:
   mysql_data:
   logo_cache:
+  wechat_rss_data:

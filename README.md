@@ -192,6 +192,41 @@ PRODUCT_HUNT_TOKEN=
 
 国内资讯优先采集量子位官方 RSS、36氪 AI 频道、InfoQ 中文和 IT之家；36氪 AI 频道也会汇集机器之心、新智元等头部媒体内容。GitHub、Hacker News、arXiv 作为工具、海外资讯和论文补充源；配置 `PRODUCT_HUNT_TOKEN` 后会额外启用 Product Hunt。每轮最多入队 `CANDIDATE_LIMIT` 条，所有内容只进入后台候选审核，不会自动发布。
 
+#### 微信公众号监控
+
+项目可选集成 We-MP-RSS，用于监控量子位、智谱AI、机器之心、新智元、APPSO 等公众号，并保留原始 `mp.weixin.qq.com` 文章链接。
+
+先在 `.env` 中设置独立后台账号和密钥：
+
+```bash
+WECHAT_RSS_USER=admin
+WECHAT_RSS_PASSWORD=请设置独立强密码
+WECHAT_RSS_SECRET_KEY=请设置至少32位随机字符串
+WECHAT_RSS_PORT=8001
+WECHAT_RSS_URL=http://we-mp-rss:8001/feed/all.json?limit=100
+WECHAT_ACCOUNT_ALLOWLIST=
+```
+
+启动微信公众号服务和候选采集器：
+
+```bash
+docker compose --profile wechat --profile automation up -d we-mp-rss collector
+```
+
+本地 Cloudflare 方案：
+
+```bash
+docker compose -f docker-compose.cloudflare.yml --profile wechat --profile automation up -d we-mp-rss collector
+```
+
+在本机打开 `http://127.0.0.1:8001`，使用 `.env` 中的独立账号登录，完成微信扫码授权并添加要监控的公众号。服务只绑定 `127.0.0.1`，没有配置到项目 Nginx 或 Cloudflare Tunnel，公网无法直接访问。部署在远程服务器时，可通过 SSH 隧道临时访问：
+
+```bash
+ssh -L 8001:127.0.0.1:8001 user@server
+```
+
+授权后只添加需要监控的公众号即可，订阅列表本身就是来源白名单。如果确实需要二次限制，可在 `WECHAT_ACCOUNT_ALLOWLIST` 中填写与 We-MP-RSS 显示完全一致的公众号名称。DeepFindTools 每小时读取聚合源，将新文章放入“候选审核”，不会自动发布。
+
 ### 数据持久化
 
 MySQL 数据保存在 Docker volume：
@@ -204,6 +239,12 @@ Logo 缓存保存在：
 
 ```text
 deepfindtools_logo_cache
+```
+
+微信公众号授权、订阅和文章缓存保存在：
+
+```text
+deepfindtools_wechat_rss_data
 ```
 
 执行 `docker compose down` 不会删除数据。执行 `docker compose down -v` 会删除数据库 volume，请谨慎使用。
@@ -433,6 +474,41 @@ PRODUCT_HUNT_TOKEN=
 
 Chinese sources are prioritized: QbitAI's official RSS, the 36Kr AI channel, InfoQ China, and ITHome. The 36Kr AI channel also aggregates publishers such as Synced and AI Era. GitHub, Hacker News, and arXiv remain as supplementary tool, international news, and research sources. Product Hunt is enabled when `PRODUCT_HUNT_TOKEN` is provided. Each run adds at most `CANDIDATE_LIMIT` review items and never publishes automatically.
 
+#### WeChat Official Account Monitoring
+
+The optional We-MP-RSS sidecar monitors accounts such as QbitAI, Zhipu AI, Synced, AI Era, and APPSO while preserving original `mp.weixin.qq.com` article URLs.
+
+Configure isolated credentials in `.env`:
+
+```bash
+WECHAT_RSS_USER=admin
+WECHAT_RSS_PASSWORD=set_a_separate_strong_password
+WECHAT_RSS_SECRET_KEY=set_a_random_secret_with_at_least_32_characters
+WECHAT_RSS_PORT=8001
+WECHAT_RSS_URL=http://we-mp-rss:8001/feed/all.json?limit=100
+WECHAT_ACCOUNT_ALLOWLIST=
+```
+
+Start the sidecar and collector:
+
+```bash
+docker compose --profile wechat --profile automation up -d we-mp-rss collector
+```
+
+For the local Cloudflare setup:
+
+```bash
+docker compose -f docker-compose.cloudflare.yml --profile wechat --profile automation up -d we-mp-rss collector
+```
+
+Open `http://127.0.0.1:8001`, sign in with the isolated credentials, authorize WeChat by QR code, and add subscriptions. The management port is bound to localhost only and is not routed through the project Nginx or Cloudflare Tunnel. For a remote server, use an SSH tunnel:
+
+```bash
+ssh -L 8001:127.0.0.1:8001 user@server
+```
+
+Subscribe only to approved accounts; the subscription list acts as the source allowlist. `WECHAT_ACCOUNT_ALLOWLIST` can optionally enforce exact account-name matches. DeepFindTools reads the aggregated JSON feed hourly and sends new articles to the manual review queue.
+
 ### Data Persistence
 
 MySQL data is stored in the Docker volume:
@@ -445,6 +521,12 @@ Logo cache files are stored in:
 
 ```text
 deepfindtools_logo_cache
+```
+
+WeChat authorization, subscriptions, and article cache are stored in:
+
+```text
+deepfindtools_wechat_rss_data
 ```
 
 Running `docker compose down` keeps volumes. Running `docker compose down -v` deletes persisted database content.
