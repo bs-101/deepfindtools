@@ -190,7 +190,7 @@ COLLECT_INTERVAL_SECONDS=3600
 PRODUCT_HUNT_TOKEN=
 ```
 
-国内资讯优先采集量子位官方 RSS、36氪 AI 频道、InfoQ 中文和 IT之家；36氪 AI 频道也会汇集机器之心、新智元等头部媒体内容。GitHub、Hacker News、arXiv 作为工具、海外资讯和论文补充源；配置 `PRODUCT_HUNT_TOKEN` 后会额外启用 Product Hunt。每轮最多入队 `CANDIDATE_LIMIT` 条，所有内容只进入后台候选审核，不会自动发布。
+国内资讯优先采集量子位官方 RSS、36氪 AI 频道、InfoQ 中文和 IT之家；36氪 AI 频道也会汇集机器之心、新智元等头部媒体内容。Hacker News 和 arXiv 作为海外资讯与论文补充源；配置 `PRODUCT_HUNT_TOKEN` 后会额外启用 Product Hunt。GitHub 自动采集已关闭。每轮最多入队 `CANDIDATE_LIMIT` 条，所有内容只进入后台候选审核，不会自动发布。
 
 #### 微信公众号监控
 
@@ -472,7 +472,7 @@ COLLECT_INTERVAL_SECONDS=3600
 PRODUCT_HUNT_TOKEN=
 ```
 
-Chinese sources are prioritized: QbitAI's official RSS, the 36Kr AI channel, InfoQ China, and ITHome. The 36Kr AI channel also aggregates publishers such as Synced and AI Era. GitHub, Hacker News, and arXiv remain as supplementary tool, international news, and research sources. Product Hunt is enabled when `PRODUCT_HUNT_TOKEN` is provided. Each run adds at most `CANDIDATE_LIMIT` review items and never publishes automatically.
+Chinese sources are prioritized: QbitAI's official RSS, the 36Kr AI channel, InfoQ China, and ITHome. The 36Kr AI channel also aggregates publishers such as Synced and AI Era. Hacker News and arXiv remain as supplementary international news and research sources. Product Hunt is enabled when `PRODUCT_HUNT_TOKEN` is provided. Automatic GitHub collection is disabled. Each run adds at most `CANDIDATE_LIMIT` review items and never publishes automatically.
 
 #### WeChat Official Account Monitoring
 

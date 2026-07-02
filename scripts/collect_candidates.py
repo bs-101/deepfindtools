@@ -368,31 +368,6 @@ def collect_36kr_ai(limit: int) -> list[dict]:
     return candidates
 
 
-def collect_github(limit: int) -> list[dict]:
-    query = quote_plus("ai llm agent in:name,description,readme pushed:>=2026-01-01")
-    url = f"https://api.github.com/search/repositories?q={query}&sort=updated&order=desc&per_page={limit}"
-    data = http_json(url, headers={"Accept": "application/vnd.github+json"})
-    candidates = []
-    for item in data.get("items", [])[:limit]:
-        stars = int(item.get("stargazers_count") or 0)
-        summary = item.get("description") or "GitHub 上近期活跃的 AI 开源项目。"
-        candidates.append(
-            make_candidate(
-                "tool",
-                "GitHub",
-                item.get("full_name") or item.get("name") or "GitHub AI project",
-                summary,
-                item.get("html_url") or "",
-                logo="",
-                score=min(95, 55 + stars // 500),
-                reason=f"GitHub 近期活跃项目，当前约 {stars} stars。",
-                category=classify(item.get("name", ""), summary),
-                tags=["开源", *tags_for(item.get("name", ""), summary)][:4],
-            )
-        )
-    return candidates
-
-
 def collect_hacker_news(limit: int) -> list[dict]:
     query = quote_plus("AI OR LLM OR agent OR OpenAI OR Anthropic")
     url = f"https://hn.algolia.com/api/v1/search_by_date?query={query}&tags=story&hitsPerPage={limit}"
@@ -522,7 +497,6 @@ def collect_once(limit: int) -> int:
         collect_wechat_feeds,
         collect_domestic_feeds,
         collect_36kr_ai,
-        collect_github,
         collect_hacker_news,
         collect_arxiv,
         collect_product_hunt,

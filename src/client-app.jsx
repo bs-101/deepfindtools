@@ -1232,12 +1232,38 @@ function LoginPage() {
   );
 }
 
+const candidateSourceGroups = [
+  { id: "all", label: "全部来源" },
+  { id: "wechat", label: "微信公众号" },
+  { id: "domestic", label: "国内媒体" },
+  { id: "global", label: "海外社区" },
+  { id: "research", label: "论文研究" },
+  { id: "products", label: "产品发现" },
+  { id: "other", label: "其他来源" },
+];
+
+function candidateSourceGroup(candidate) {
+  const source = String(candidate.sourceName || "").toLowerCase();
+  const url = String(candidate.sourceUrl || candidate.url || "").toLowerCase();
+  if (url.includes("mp.weixin.qq.com")) return "wechat";
+  if (source.includes("arxiv") || url.includes("arxiv.org")) return "research";
+  if (source.includes("product hunt") || url.includes("producthunt.com")) return "products";
+  if (source.includes("hacker news") || source.includes("github") || url.includes("news.ycombinator.com") || url.includes("github.com")) return "global";
+  if (
+    ["量子位", "机器之心", "新智元", "智谱", "infoq", "it之家", "36氪"].some((name) => source.includes(name.toLowerCase()))
+    || ["qbitai.com", "36kr.com", "infoq.cn", "ithome.com"].some((domain) => url.includes(domain))
+  ) return "domestic";
+  return "other";
+}
+
 function AdminPage() {
   const { tools, categories, news, candidates, loading, reload } = useData(true);
   const [activeAdminSection, setActiveAdminSection] = useState("tools");
   const [toolQuery, setToolQuery] = useState("");
   const [newsQuery, setNewsQuery] = useState("");
   const [candidateQuery, setCandidateQuery] = useState("");
+  const [candidateSourceGroupId, setCandidateSourceGroupId] = useState("all");
+  const [candidateSourceName, setCandidateSourceName] = useState("all");
   const [selectedCandidateIds, setSelectedCandidateIds] = useState([]);
   const [bulkCandidateBusy, setBulkCandidateBusy] = useState(false);
   const [toolForm, setToolForm] = useState(emptyTool());
@@ -1427,7 +1453,23 @@ function AdminPage() {
   const shownNews = sortNewsByDate(
     news.filter((item) => [item.title, item.summary, item.kind, item.sourceName].join(" ").toLowerCase().includes(newsQuery.toLowerCase())),
   );
+  const candidateSourceCounts = candidates.reduce((counts, candidate) => {
+    const groupId = candidateSourceGroup(candidate);
+    counts[groupId] = (counts[groupId] || 0) + 1;
+    return counts;
+  }, {});
+  const candidateSourceOptions = Object.entries(
+    candidates
+      .filter((candidate) => candidateSourceGroupId === "all" || candidateSourceGroup(candidate) === candidateSourceGroupId)
+      .reduce((counts, candidate) => {
+        const sourceName = candidate.sourceName || "未标记来源";
+        counts[sourceName] = (counts[sourceName] || 0) + 1;
+        return counts;
+      }, {}),
+  ).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-CN"));
   const shownCandidates = candidates
+    .filter((item) => candidateSourceGroupId === "all" || candidateSourceGroup(item) === candidateSourceGroupId)
+    .filter((item) => candidateSourceName === "all" || (item.sourceName || "未标记来源") === candidateSourceName)
     .filter((item) => [item.title, item.name, item.summary, item.sourceName, item.reason, item.type, item.status].join(" ").toLowerCase().includes(candidateQuery.toLowerCase()))
     .sort((a, b) => {
       const statusRank = { pending: 0, accepted: 1, rejected: 2 };
@@ -1641,6 +1683,36 @@ function AdminPage() {
                 </div>
                 <input value={candidateQuery} onChange={(e) => setCandidateQuery(e.target.value)} placeholder="搜索标题、来源、状态或推荐理由" />
               </div>
+              <div className="candidate-source-filters">
+                <div className="candidate-source-tabs" role="group" aria-label="按信息源分类查看">
+                  {candidateSourceGroups.map((group) => (
+                    <button
+                      type="button"
+                      className={candidateSourceGroupId === group.id ? "active" : ""}
+                      onClick={() => {
+                        setCandidateSourceGroupId(group.id);
+                        setCandidateSourceName("all");
+                      }}
+                      key={group.id}
+                    >
+                      <span>{group.label}</span>
+                      <strong>{group.id === "all" ? candidates.length : candidateSourceCounts[group.id] || 0}</strong>
+                    </button>
+                  ))}
+                </div>
+                <div className="candidate-source-detail">
+                  <label>
+                    <span>具体来源</span>
+                    <select value={candidateSourceName} onChange={(event) => setCandidateSourceName(event.target.value)}>
+                      <option value="all">全部具体来源</option>
+                      {candidateSourceOptions.map(([sourceName, count]) => (
+                        <option value={sourceName} key={sourceName}>{sourceName}（{count}）</option>
+                      ))}
+                    </select>
+                  </label>
+                  <span>显示 {shownCandidates.length} / {candidates.length} 条</span>
+                </div>
+              </div>
               <div className="candidate-bulkbar">
                 <label>
                   <input
@@ -1699,7 +1771,12 @@ function AdminPage() {
                     <div className="candidate-body">
                       <div className="candidate-title">
                         <h3>{candidate.title || candidate.name}</h3>
-                        <span>{candidate.status || "pending"}</span>
+                        <div>
+                          <span className={`candidate-source-kind kind-${candidateSourceGroup(candidate)}`}>
+                            {candidateSourceGroups.find((group) => group.id === candidateSourceGroup(candidate))?.label || "其他来源"}
+                          </span>
+                          <span>{candidate.status || "pending"}</span>
+                        </div>
                       </div>
                       <p>{candidate.summary}</p>
                       <small>{candidate.sourceName || "自动采集"} · {candidate.reason || "待人工确认"}</small>
