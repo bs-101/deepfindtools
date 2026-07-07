@@ -31,6 +31,8 @@ DATA_DIR = ROOT / "data"
 SEED_PATH = DATA_DIR / "seed.json"
 DB_PATH = DATA_DIR / "db.json"
 LOGO_CACHE_DIR = DATA_DIR / "logo-cache"
+RUNTIME_DIR = DATA_DIR / "runtime"
+COLLECTOR_RUNS_PATH = RUNTIME_DIR / "collector-runs.json"
 
 ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
@@ -53,6 +55,11 @@ def write_json(path, data):
 def next_id(prefix, items=None):
     count = len(items or [])
     return f"{prefix}-{int(time.time() * 1000)}-{count + 1}"
+
+
+def compact_text(value, limit=220):
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    return text[: limit - 1] + "…" if len(text) > limit else text
 
 
 def sort_news(items):
@@ -528,6 +535,24 @@ def sanitize_external_url(value):
     return urlunparse(parsed._replace(query=urlencode(kept, doseq=True), fragment=fragment))
 
 
+def slugify(value):
+    text = re.sub(r"[^\w\u4e00-\u9fff]+", "-", str(value or "").strip().lower(), flags=re.U)
+    text = re.sub(r"^-+|-+$", "", text)
+    return text[:80]
+
+
+def news_slug(item):
+    if item.get("slug"):
+        return slugify(item.get("slug"))
+    title_slug = slugify(item.get("title") or "")
+    id_slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", str(item.get("id") or "news"))
+    return f"{title_slug}-{id_slug}" if title_slug else id_slug
+
+
+def news_detail_href(item):
+    return f"/news/{news_slug(item)}"
+
+
 def public_tool(tool):
     item = dict(tool)
     tool_id = str(item.get("id") or "")
@@ -553,6 +578,8 @@ def public_news_item(item):
         news["sourceUrl"] = sanitize_external_url(news.get("sourceUrl") or "")
     if news.get("coverImage") and is_remote_url(news.get("coverImage")):
         news["coverImage"] = sanitize_external_url(news.get("coverImage") or "")
+    news["slug"] = news_slug(news)
+    news["detailUrl"] = news_detail_href(news)
     return news
 
 
@@ -565,6 +592,55 @@ def find_tool(tool_id, include_drafts=False):
         if str(tool.get("id")) == str(tool_id):
             return tool
     return None
+
+
+def find_news(news_id, include_drafts=False):
+    value = str(news_id or "")
+    for item in STORE.news(include_drafts=include_drafts):
+        if str(item.get("id")) == value or str(item.get("slug") or "") == value or news_slug(item) == value:
+            return item
+    return None
+
+
+def read_collector_runs(limit=20):
+    if not COLLECTOR_RUNS_PATH.exists():
+        return []
+    try:
+        runs = read_json(COLLECTOR_RUNS_PATH)
+    except Exception:
+        return []
+    if not isinstance(runs, list):
+        return []
+    return runs[-limit:][::-1]
+
+
+def automation_status():
+    runs = read_collector_runs()
+    latest = runs[0] if runs else None
+    source_totals = {}
+    for run in runs:
+        for source in run.get("sources", []):
+            name = source.get("label") or source.get("name") or "unknown"
+            current = source_totals.setdefault(name, {"name": name, "runs": 0, "ok": 0, "count": 0, "errors": 0, "lastError": ""})
+            current["runs"] += 1
+            current["count"] += int(source.get("count") or 0)
+            if source.get("ok"):
+                current["ok"] += 1
+            else:
+                current["errors"] += 1
+                current["lastError"] = str(source.get("error") or "")[:180]
+    cached_logos = len([path for path in LOGO_CACHE_DIR.glob("*") if path.is_file()]) if LOGO_CACHE_DIR.exists() else 0
+    remote_logos = sum(1 for tool in STORE.tools(include_drafts=True) if is_remote_url(str(tool.get("logoRemote") or tool.get("logo") or "")))
+    return {
+        "latestRun": latest,
+        "runs": runs,
+        "sources": sorted(source_totals.values(), key=lambda item: item["name"]),
+        "logoCache": {
+            "cached": cached_logos,
+            "remote": remote_logos,
+            "missing": max(remote_logos - cached_logos, 0),
+        },
+    }
 
 
 def site_base(headers):
@@ -731,7 +807,21 @@ class Handler(SimpleHTTPRequestHandler):
 
     def serve_robots(self):
         base = site_base(self.headers)
-        return self.serve_text(f"User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /login\nSitemap: {base}/sitemap.xml\n")
+        return self.serve_text(
+            "\n".join(
+                [
+                    "User-agent: *",
+                    "Allow: /",
+                    "Disallow: /admin",
+                    "Disallow: /login",
+                    f"Sitemap: {base}/sitemap.xml",
+                    f"Sitemap: {base}/sitemap-tools.xml",
+                    f"Sitemap: {base}/sitemap-news.xml",
+                    f"Sitemap: {base}/sitemap-categories.xml",
+                    "",
+                ]
+            )
+        )
 
     def serve_sitemap(self):
         base = site_base(self.headers)
@@ -830,10 +920,19 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/news":
             news = STORE.news(include_drafts=include_drafts)
             return self.send_json(news if include_drafts else public_news(news))
+        if parsed.path.startswith("/api/news/"):
+            item = find_news(parsed.path.rsplit("/", 1)[-1], include_drafts=include_drafts)
+            if not item:
+                return self.send_json({"error": "Not found"}, 404)
+            return self.send_json(item if include_drafts else public_news_item(item))
         if parsed.path == "/api/candidates":
             if not self.require_admin():
                 return
             return self.send_json(STORE.candidates())
+        if parsed.path == "/api/automation":
+            if not self.require_admin():
+                return
+            return self.send_json(automation_status())
         if parsed.path == "/api/meta":
             return self.send_json({"store": STORE.name, "adminUser": ADMIN_USER})
         if parsed.path == "/api/session":
@@ -868,6 +967,32 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"ok": true}')
             return
+
+        if parsed.path == "/api/submissions":
+            payload = self.read_body()
+            if payload.get("website"):
+                return self.send_json({"ok": True}, 202)
+            name = compact_text(payload.get("name"), 80)
+            url = sanitize_external_url(payload.get("url") or "")
+            summary = compact_text(payload.get("summary"), 260)
+            if not name or not is_remote_url(url) or not summary:
+                return self.send_json({"error": "请填写工具名称、官网链接和简介"}, 400)
+            candidate = {
+                "type": "tool",
+                "name": name,
+                "title": name,
+                "url": url,
+                "sourceUrl": url,
+                "summary": summary,
+                "category": payload.get("category") or "chat",
+                "tags": [item.strip() for item in str(payload.get("tags") or "").replace("，", ",").split(",") if item.strip()][:5],
+                "status": "pending",
+                "score": 68,
+                "sourceName": "用户提交",
+                "reason": compact_text(payload.get("reason") or "来自公开提交入口，等待人工审核。", 180),
+                "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+            return self.send_json(STORE.create("candidates", candidate), 201)
 
         if not parsed.path.startswith("/api/") or not self.require_admin():
             return

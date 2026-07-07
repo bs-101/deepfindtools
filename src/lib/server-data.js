@@ -67,6 +67,26 @@ function sanitizeExternalUrl(value = "") {
   return parsed.toString();
 }
 
+export function slugify(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+export function newsSlug(news = {}) {
+  if (news.slug) return slugify(news.slug);
+  const titleSlug = slugify(news.title || "");
+  const idSlug = String(news.id || "news").replace(/[^a-zA-Z0-9_-]+/g, "-");
+  return titleSlug ? `${titleSlug}-${idSlug}` : idSlug;
+}
+
+export function newsDetailHref(news = {}) {
+  return `/news/${encodeURIComponent(newsSlug(news))}`;
+}
+
 function publicTool(tool) {
   const item = { ...tool };
   const id = String(item.id || "");
@@ -87,6 +107,8 @@ function publicNewsItem(news) {
   const item = { ...news };
   if (item.sourceUrl) item.sourceUrl = sanitizeExternalUrl(item.sourceUrl);
   if (item.coverImage && isRemoteUrl(item.coverImage)) item.coverImage = sanitizeExternalUrl(item.coverImage);
+  item.slug = newsSlug(item);
+  item.detailUrl = newsDetailHref(item);
   return item;
 }
 
@@ -131,6 +153,11 @@ export function findTool(data, id) {
   return data.tools.find((tool) => String(tool.id) === String(id));
 }
 
+export function findNews(data, slugOrId) {
+  const value = decodeURIComponent(String(slugOrId || ""));
+  return data.news.find((item) => String(item.id) === value || newsSlug(item) === value || String(item.slug || "") === value);
+}
+
 export function categoryName(categories, id) {
   return categories.find((category) => category.id === id)?.name || "AI工具";
 }
@@ -141,4 +168,17 @@ export function siteBase() {
 
 export function toolDescription(tool, categories) {
   return `${tool.name}：${tool.summary || categoryName(categories, tool.category)}。DeepFind Tools 收录的 AI 工具详情、分类、标签和官网入口。`;
+}
+
+export function newsDescription(news) {
+  const summary = String(news.summary || news.bodyMarkdown || "").replace(/\s+/g, " ").trim();
+  return `${news.title}。${summary || "DeepFind Tools 每日 AI 资讯收录的行业新闻、产品动态和工具趋势。"}`.slice(0, 155);
+}
+
+export function sortNewsByDate(items = []) {
+  return [...items].sort((a, b) => {
+    const aTime = Date.parse(a.publishedAt || a.createdAt || "") || 0;
+    const bTime = Date.parse(b.publishedAt || b.createdAt || "") || 0;
+    return bTime - aTime || String(b.id || "").localeCompare(String(a.id || ""));
+  });
 }

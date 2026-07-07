@@ -45,6 +45,7 @@ services:
       - "4173"
     volumes:
       - logo_cache:/app/data/logo-cache
+      - runtime_data:/app/data/runtime
 
   frontend:
     build:
@@ -139,9 +140,53 @@ services:
       PRODUCT_HUNT_TOKEN: ${PRODUCT_HUNT_TOKEN:-}
       WECHAT_RSS_URL: ${WECHAT_RSS_URL:-http://we-mp-rss:8001/feed/all.json?limit=100}
       WECHAT_ACCOUNT_ALLOWLIST: ${WECHAT_ACCOUNT_ALLOWLIST:-}
+      RUNTIME_DIR: /app/data/runtime
     command: ["python", "scripts/collect_candidates.py", "--loop"]
+    volumes:
+      - runtime_data:/app/data/runtime
+
+  logo-prefetch:
+    build:
+      context: .
+      target: backend
+    container_name: deepfindtools-local-logo-prefetch
+    profiles:
+      - maintenance
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_ENGINE: ${DB_ENGINE:-django.db.backends.mysql}
+      DB_NAME: ${DB_NAME:-adops_db}
+      DB_USER: ${DB_USER:-adops_user}
+      DB_PASSWORD: ${DB_PASSWORD:-your_password}
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_PORT: ${DB_PORT:-3306}
+    command: ["python", "scripts/prefetch_logos.py", "--limit", "${LOGO_PREFETCH_LIMIT:-260}"]
+    volumes:
+      - logo_cache:/app/data/logo-cache
+
+  tool-enrich:
+    build:
+      context: .
+      target: backend
+    container_name: deepfindtools-local-tool-enrich
+    profiles:
+      - maintenance
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_ENGINE: ${DB_ENGINE:-django.db.backends.mysql}
+      DB_NAME: ${DB_NAME:-adops_db}
+      DB_USER: ${DB_USER:-adops_user}
+      DB_PASSWORD: ${DB_PASSWORD:-your_password}
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_PORT: ${DB_PORT:-3306}
+    command: ["python", "scripts/enrich_tool_details.py", "--limit", "${TOOL_ENRICH_LIMIT:-50}"]
 
 volumes:
   mysql_data:
   logo_cache:
+  runtime_data:
   wechat_rss_data:

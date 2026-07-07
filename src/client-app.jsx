@@ -112,24 +112,25 @@ const fallbackNews = [
 ];
 
 function useData(includeDrafts = false, initialData = null) {
-  const [data, setData] = useState(() => initialData ? { tools: initialData.tools || [], categories: initialData.categories || [], news: initialData.news || [], candidates: [], loading: false } : { tools: [], categories: [], news: [], candidates: [], loading: true });
+  const [data, setData] = useState(() => initialData ? { tools: initialData.tools || [], categories: initialData.categories || [], news: initialData.news || [], candidates: [], automation: null, loading: false } : { tools: [], categories: [], news: [], candidates: [], automation: null, loading: true });
 
   async function load() {
     try {
       const query = includeDrafts ? "?includeDrafts=1" : "";
-      const [tools, categories, news, candidates] = await Promise.all([
+      const [tools, categories, news, candidates, automation] = await Promise.all([
         api.get(`/api/tools${query}`),
         api.get("/api/categories"),
         api.get(`/api/news${query}`),
         includeDrafts ? api.get("/api/candidates") : Promise.resolve([]),
+        includeDrafts ? api.get("/api/automation") : Promise.resolve(null),
       ]);
-      setData({ tools, categories, news, candidates, loading: false });
+      setData({ tools, categories, news, candidates, automation, loading: false });
     } catch (error) {
       if (error.message === "UNAUTHORIZED") {
         throw error;
       }
       const seed = await api.get("/data/seed.json");
-      setData({ tools: seed.tools || [], categories: seed.categories || [], news: seed.news || [], candidates: [], loading: false });
+      setData({ tools: seed.tools || [], categories: seed.categories || [], news: seed.news || [], candidates: [], automation: null, loading: false });
     }
   }
 
@@ -332,6 +333,31 @@ function sortNewsByDate(items) {
 
 function toolDetailHref(tool) {
   return tool?.detailUrl || (tool?.id ? `/sites/${encodeURIComponent(tool.id)}.html` : tool?.url || "#");
+}
+
+function slugify(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function newsSlug(item = {}) {
+  if (item.slug) return slugify(item.slug);
+  const titleSlug = slugify(item.title || "");
+  const idSlug = String(item.id || "news").replace(/[^a-zA-Z0-9_-]+/g, "-");
+  return titleSlug ? `${titleSlug}-${idSlug}` : idSlug;
+}
+
+function newsDetailHref(item = {}) {
+  return item.detailUrl || `/news/${encodeURIComponent(newsSlug(item))}`;
+}
+
+function findNewsBySlug(news, slugOrId) {
+  const value = decodeURIComponent(String(slugOrId || ""));
+  return news.find((item) => String(item.id) === value || String(item.slug || "") === value || newsSlug(item) === value);
 }
 
 function officialToolUrl(tool) {
@@ -618,6 +644,7 @@ function TopNav() {
         <a href="/daily-ai-news">每日AI资讯</a>
         <a href="/category/latest">最新AI项目</a>
         <a href="/category/learning">AI教程资源</a>
+        <a href="/submit">提交工具</a>
         <a href="/#tools-index">关于我们</a>
       </nav>
     </header>
@@ -857,6 +884,78 @@ function CategoryPage({ categoryId, initialData = null }) {
   );
 }
 
+function SubmitPage({ initialData = null } = {}) {
+  const { tools, categories } = useData(false, initialData);
+  const [query, setQuery] = useState("");
+  const [form, setForm] = useState({ name: "", url: "", category: "chat", tags: "", summary: "", reason: "", website: "" });
+  const [message, setMessage] = useState("");
+
+  function update(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setMessage("正在提交到候选池...");
+    try {
+      await api.send("/api/submissions", "POST", form);
+      setForm({ name: "", url: "", category: "chat", tags: "", summary: "", reason: "", website: "" });
+      setMessage("提交成功。内容会进入后台候选池，人工审核后再收录。");
+    } catch (error) {
+      setMessage("提交失败，请检查名称、官网链接和简介是否完整。");
+    }
+  }
+
+  return (
+    <FrontShell tools={tools} categories={categories} activeSection="all" query={query} setQuery={setQuery} hero={false}>
+      <section className="submit-page">
+        <div className="archive-head">
+          <div className="breadcrumb">
+            <a href="/">首页</a>
+            <span>·</span>
+            <strong>提交工具</strong>
+          </div>
+          <div className="archive-title">
+            <div>
+              <p className="eyebrow">submit</p>
+              <h1>提交 AI 工具收录</h1>
+              <p>推荐新工具、产品更新或你自己的 AI 项目。提交后会进入候选池，审核通过后展示在 DeepFind Tools。</p>
+            </div>
+            <a className="archive-back" href="/daily-ai-news">查看每日资讯</a>
+          </div>
+        </div>
+
+        <section className="submit-layout">
+          <SpotlightCard className="submit-card" as="section">
+            <form className="console-form" onSubmit={submit}>
+              <input className="hidden-field" value={form.website} onChange={(event) => update("website", event.target.value)} tabIndex="-1" autoComplete="off" />
+              <label>工具名称<input value={form.name} onChange={(event) => update("name", event.target.value)} required /></label>
+              <label>官网链接<input value={form.url} onChange={(event) => update("url", event.target.value)} placeholder="https://example.com" required /></label>
+              <div className="form-pair">
+                <label>分类<select value={form.category} onChange={(event) => update("category", event.target.value)}>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+                <label>标签<input value={form.tags} onChange={(event) => update("tags", event.target.value)} placeholder="多个标签用逗号分隔" /></label>
+              </div>
+              <label>一句话简介<textarea value={form.summary} onChange={(event) => update("summary", event.target.value)} rows="4" required /></label>
+              <label>推荐理由<textarea value={form.reason} onChange={(event) => update("reason", event.target.value)} rows="4" placeholder="可选：适合什么场景、相比同类工具有什么亮点" /></label>
+              <div className="form-actions"><button type="submit">提交到候选池</button></div>
+              <p className="form-message">{message}</p>
+            </form>
+          </SpotlightCard>
+
+          <aside className="submit-side">
+            <h2>更容易通过的内容</h2>
+            <ul>
+              <li>官网链接清晰可访问，不使用推广跳转或短链。</li>
+              <li>简介说明真实功能、适合人群和使用场景。</li>
+              <li>如果是新上线产品，可在推荐理由里写版本、发布时间或亮点。</li>
+            </ul>
+          </aside>
+        </section>
+      </section>
+    </FrontShell>
+  );
+}
+
 function DailyNewsPage({ initialData = null } = {}) {
   const { tools, categories, news } = useData(false, initialData);
   const [query, setQuery] = useState("");
@@ -942,7 +1041,7 @@ function DailyNewsPage({ initialData = null } = {}) {
             <h3>最新文章</h3>
             <div className="mini-articles">
               {publishedNews.slice(0, 5).map((item) => (
-                <a key={item.id || item.title} href={item.sourceUrl || "/daily-ai-news"}>
+                <a key={item.id || item.title} href={newsDetailHref(item)}>
                   <strong>{item.title}</strong>
                   <span>{item.publishedAt || "今日"} · {item.kind || "资讯"}</span>
                 </a>
@@ -981,12 +1080,119 @@ function NewsArticleItem({ item }) {
       <span>来源：{item.sourceName || item.kind || "AI工具集"}</span>
     </>
   );
-  return item.sourceUrl ? (
-    <a className="timeline-item" href={item.sourceUrl} target="_blank" rel="noreferrer">
+  return (
+    <a className="timeline-item" href={newsDetailHref(item)}>
       {content}
     </a>
-  ) : (
-    <div className="timeline-item">{content}</div>
+  );
+}
+
+function NewsDetailPage({ newsSlug: routeSlug, initialData = null } = {}) {
+  const { tools, categories, news, loading } = useData(false, initialData);
+  const [query, setQuery] = useState("");
+  const publishedNews = sortNewsByDate(news.filter((item) => item.status !== "draft"));
+  const item = findNewsBySlug(publishedNews, routeSlug);
+  const relatedNews = item
+    ? publishedNews
+      .filter((newsItem) => String(newsItem.id) !== String(item.id))
+      .filter((newsItem) => newsItem.kind === item.kind || newsItem.sourceName === item.sourceName)
+      .slice(0, 5)
+    : [];
+  const hotTools = tools.filter((tool) => tool.featured).slice(0, 8);
+
+  useEffect(() => {
+    if (item?.title) document.title = `${item.title} - 每日 AI 资讯 | DeepFind Tools`;
+  }, [item?.title]);
+
+  if (loading && !item) {
+    return (
+      <FrontShell tools={tools} categories={categories} activeSection="daily" query={query} setQuery={setQuery} hero={false}>
+        <section className="detail-shell"><p className="eyebrow">loading</p><h1>正在加载资讯详情...</h1></section>
+      </FrontShell>
+    );
+  }
+
+  if (!item) {
+    return (
+      <FrontShell tools={tools} categories={categories} activeSection="daily" query={query} setQuery={setQuery} hero={false}>
+        <section className="detail-shell"><p className="eyebrow">not found</p><h1>资讯不存在或已下架</h1><a className="archive-back" href="/daily-ai-news">返回每日资讯</a></section>
+      </FrontShell>
+    );
+  }
+
+  const body = String(item.bodyMarkdown || "").trim();
+  const sourceUrl = safeContentUrl(item.sourceUrl);
+
+  return (
+    <FrontShell tools={tools} categories={categories} activeSection="daily" query={query} setQuery={setQuery} hero={false}>
+      <article className="news-detail-page">
+        <div className="breadcrumb">
+          <a href="/">首页</a>
+          <span>·</span>
+          <a href="/daily-ai-news">每日 AI 资讯</a>
+          <span>·</span>
+          <strong>{item.kind || "资讯"}</strong>
+        </div>
+
+        <section className="news-detail-hero">
+          <div>
+            <p className="eyebrow">daily briefing</p>
+            <h1>{item.title}</h1>
+            <p>{item.summary}</p>
+            <div className="daily-meta">
+              <span>{item.publishedAt || "今日"}</span>
+              <span>{item.kind || "资讯"}</span>
+              <span>{item.sourceName || "DeepFind Tools"}</span>
+            </div>
+          </div>
+          {item.coverImage ? <img src={item.coverImage} alt={item.title} loading="eager" /> : <div className="news-detail-cover"><strong>AI</strong><span>Briefing</span></div>}
+        </section>
+
+        <section className="detail-content">
+          <div className="detail-main">
+            {body ? (
+              <MarkdownContent value={body} />
+            ) : (
+              <>
+                <h2>核心摘要</h2>
+                <p>{item.summary}</p>
+                <h2>为什么值得关注？</h2>
+                <ul className="detail-list">
+                  <li>这条信息来自 {item.sourceName || "公开来源"}，适合用于判断 AI 产品、模型或产业动态。</li>
+                  <li>建议结合原始来源、发布时间和相关工具进行二次核对。</li>
+                  <li>DeepFind Tools 会持续把重要资讯沉淀到每日快讯和相关工具页面中。</li>
+                </ul>
+              </>
+            )}
+            {sourceUrl ? (
+              <p className="source-line">
+                原始来源：<a href={sourceUrl} target="_blank" rel="noopener noreferrer nofollow">打开来源文章</a>
+              </p>
+            ) : null}
+          </div>
+
+          <aside className="detail-side">
+            <h3>资讯信息</h3>
+            <dl>
+              <dt>日期</dt><dd>{item.publishedAt || "未标记"}</dd>
+              <dt>类型</dt><dd>{item.kind || "资讯"}</dd>
+              <dt>来源</dt><dd>{item.sourceName || "DeepFind Tools"}</dd>
+              <dt>状态</dt><dd>{item.status || "published"}</dd>
+            </dl>
+            {relatedNews.length ? (
+              <div className="related-news-mini">
+                <h4>相关资讯</h4>
+                {relatedNews.map((newsItem) => (
+                  <a key={newsItem.id || newsItem.title} href={newsDetailHref(newsItem)}>{newsItem.title}</a>
+                ))}
+              </div>
+            ) : null}
+          </aside>
+        </section>
+
+        {hotTools.length ? <ToolSection title="相关热门工具" subtitle="从资讯回到可试用的 AI 工具" tools={hotTools} categories={categories} /> : null}
+      </article>
+    </FrontShell>
   );
 }
 
@@ -1257,7 +1463,7 @@ function candidateSourceGroup(candidate) {
 }
 
 function AdminPage() {
-  const { tools, categories, news, candidates, loading, reload } = useData(true);
+  const { tools, categories, news, candidates, automation, loading, reload } = useData(true);
   const [activeAdminSection, setActiveAdminSection] = useState("tools");
   const [toolQuery, setToolQuery] = useState("");
   const [newsQuery, setNewsQuery] = useState("");
@@ -1312,12 +1518,19 @@ function AdminPage() {
 
   async function saveNews(event) {
     event.preventDefault();
-    const createdFromCandidate = !newsForm.id && newsForm.sourceCandidateId;
-    const saved = await api.send(newsForm.id ? `/api/news/${encodeURIComponent(newsForm.id)}` : "/api/news", newsForm.id ? "PUT" : "POST", newsForm);
+    const payload = {
+      ...newsForm,
+      slug: slugify(newsForm.slug || ""),
+      summary: String(newsForm.summary || "").trim(),
+      bodyMarkdown: String(newsForm.bodyMarkdown || "").trim(),
+      updatedAt: new Date().toISOString(),
+    };
+    const createdFromCandidate = !payload.id && payload.sourceCandidateId;
+    const saved = await api.send(payload.id ? `/api/news/${encodeURIComponent(payload.id)}` : "/api/news", payload.id ? "PUT" : "POST", payload);
     if (createdFromCandidate) {
-      await markCandidateAccepted(newsForm.sourceCandidateId, "news", saved.id);
+      await markCandidateAccepted(payload.sourceCandidateId, "news", saved.id);
     }
-    setMessage(createdFromCandidate ? `候选已审核并${newsForm.status === "draft" ? "保存为资讯草稿" : "发布为每日资讯"}` : "资讯已保存");
+    setMessage(createdFromCandidate ? `候选已审核并${payload.status === "draft" ? "保存为资讯草稿" : "发布为每日资讯"}` : "资讯已保存");
     setNewsForm(emptyNews());
     await reload();
   }
@@ -1508,7 +1721,7 @@ function AdminPage() {
             <h1>内容运营后台</h1>
             <p>维护工具库、Logo、分类、推荐状态和每日 AI 快讯内容。</p>
           </div>
-          <span>PostgreSQL · {tools.length} 工具 / {news.length} 资讯 / {pendingCandidates.length} 待审</span>
+          <span>数据库 · {tools.length} 工具 / {news.length} 资讯 / {pendingCandidates.length} 待审</span>
         </header>
 
         <section className="admin-metrics" aria-label="后台概览">
@@ -1532,6 +1745,11 @@ function AdminPage() {
             <strong>{pendingCandidates.length}</strong>
             <small>全部候选 {candidates.length}</small>
           </div>
+          <div>
+            <span>最近采集</span>
+            <strong>{automation?.latestRun?.inserted ?? 0}</strong>
+            <small>{automation?.latestRun?.finishedAt ? `完成于 ${new Date(automation.latestRun.finishedAt).toLocaleString()}` : "暂无运行记录"}</small>
+          </div>
         </section>
 
         <section className="admin-switchboard" aria-label="后台模块切换">
@@ -1546,6 +1764,10 @@ function AdminPage() {
           <button className={activeAdminSection === "candidates" ? "active" : ""} type="button" onClick={() => setActiveAdminSection("candidates")}>
             <strong>候选审核</strong>
             <span>自动采集结果，确认后再入库</span>
+          </button>
+          <button className={activeAdminSection === "ops" ? "active" : ""} type="button" onClick={() => setActiveAdminSection("ops")}>
+            <strong>运营监控</strong>
+            <span>采集任务、来源健康和 Logo 缓存</span>
           </button>
         </section>
 
@@ -1632,6 +1854,7 @@ function AdminPage() {
                 <div className="form-cluster">
                   <h3>资讯内容</h3>
                   <label>标题<input value={newsForm.title} onChange={(e) => updateNews("title", e.target.value)} required /></label>
+                  <label>自定义 URL Slug<input value={newsForm.slug} onChange={(e) => updateNews("slug", e.target.value)} placeholder="可选，留空则自动使用标题和 ID 生成" /></label>
                   <div className="form-pair">
                     <label>类型<select value={newsForm.kind} onChange={(e) => updateNews("kind", e.target.value)}><option value="资讯">资讯</option><option value="项目">项目</option><option value="教程">教程</option><option value="模型">模型</option></select></label>
                     <label>日期<input type="date" value={newsForm.publishedAt} onChange={(e) => updateNews("publishedAt", e.target.value)} /></label>
@@ -1641,7 +1864,8 @@ function AdminPage() {
                     <label>来源链接<input value={newsForm.sourceUrl} onChange={(e) => updateNews("sourceUrl", e.target.value)} /></label>
                   </div>
                   <label>封面图地址<input value={newsForm.coverImage} onChange={(e) => updateNews("coverImage", e.target.value)} placeholder="用于每日快讯页头图，可留空" /></label>
-                  <label>摘要 / 正文<textarea value={newsForm.summary} onChange={(e) => updateNews("summary", e.target.value)} rows="6" /></label>
+                  <label>列表摘要<textarea value={newsForm.summary} onChange={(e) => updateNews("summary", e.target.value)} rows="4" placeholder="用于每日资讯列表、搜索结果和 SEO 描述，建议 80-180 字。" /></label>
+                  <label>详情 Markdown<textarea value={newsForm.bodyMarkdown} onChange={(e) => updateNews("bodyMarkdown", e.target.value)} rows="8" placeholder={`## 事件背景\n补充完整事实、影响范围和你的判断。\n\n## 值得关注\n- 对产品/模型/工具生态的影响\n- 可延伸关联的工具或公司\n\n[查看原始来源](${newsForm.sourceUrl || "https://example.com"})`} /></label>
                 </div>
                 <div className="form-cluster compact-cluster">
                   <h3>互动与状态</h3>
@@ -1673,7 +1897,7 @@ function AdminPage() {
               </div>
             </SpotlightCard>
           </section>
-        ) : (
+        ) : activeAdminSection === "candidates" ? (
           <section className="admin-module candidate-module">
             <SpotlightCard className="list-panel candidate-panel" as="section">
               <div className="panel-head">
@@ -1804,6 +2028,8 @@ function AdminPage() {
               </div>
             </SpotlightCard>
           </section>
+        ) : (
+          <OpsPanel automation={automation} tools={tools} candidates={candidates} onRefresh={reload} />
         )}
         <p className="form-message">{message}</p>
       </main>
@@ -1866,10 +2092,86 @@ function candidateToNewsForm(candidate) {
     sourceUrl: candidate.sourceUrl || candidate.url || "",
     coverImage: candidate.coverImage || "",
     summary: candidate.summary || candidate.reason || "",
+    bodyMarkdown: candidate.bodyMarkdown || `## 事件摘要\n${candidate.summary || candidate.reason || "这里补充事件背景、核心事实和影响范围。"}\n\n## 为什么值得关注？\n- 来源：${candidate.sourceName || "自动采集"}\n- 建议人工核对原文、发布时间和关键数据后再发布。\n\n## 原始来源\n[查看来源](${candidate.sourceUrl || candidate.url || "https://example.com"})`,
     comments: 0,
     likes: 0,
     status: "published",
   };
+}
+
+function OpsPanel({ automation, tools, candidates, onRefresh }) {
+  const latest = automation?.latestRun;
+  const sources = automation?.sources || [];
+  const runs = automation?.runs || [];
+  const logoCache = automation?.logoCache || { cached: 0, remote: tools.filter((tool) => tool.logo).length, missing: 0 };
+  const pending = candidates.filter((item) => (item.status || "pending") === "pending").length;
+
+  return (
+    <section className="admin-module ops-module">
+      <SpotlightCard className="ops-hero" as="section">
+        <div>
+          <p className="eyebrow">automation</p>
+          <h2>运营监控</h2>
+          <p>这里用于检查定时采集、信息源健康和 Logo 本地缓存。采集器只进入候选池，仍然需要你二次确认后发布。</p>
+        </div>
+        <button type="button" onClick={onRefresh}>刷新状态</button>
+      </SpotlightCard>
+
+      <section className="ops-grid">
+        <SpotlightCard className="ops-card" as="section">
+          <span>最近一次采集</span>
+          <strong>{latest ? (latest.ok ? "正常" : "部分失败") : "暂无记录"}</strong>
+          <p>{latest?.finishedAt ? new Date(latest.finishedAt).toLocaleString() : "采集器启动后会写入运行日志。"}</p>
+          <small>发现 {latest?.candidateCount ?? 0} 条 · 新增 {latest?.inserted ?? 0} 条 · 待审 {pending} 条</small>
+        </SpotlightCard>
+        <SpotlightCard className="ops-card" as="section">
+          <span>Logo 缓存</span>
+          <strong>{logoCache.cached}/{logoCache.remote}</strong>
+          <p>远程 Logo 会通过 `/api/logo` 缓存；部署后建议运行预热任务。</p>
+          <small>预计未缓存 {logoCache.missing} 个</small>
+        </SpotlightCard>
+        <SpotlightCard className="ops-card" as="section">
+          <span>发布节奏</span>
+          <strong>{tools.filter((tool) => tool.isNew).length}</strong>
+          <p>最新收录越稳定，首页和 RSS 越有持续更新信号。</p>
+          <small>推荐工具 {tools.filter((tool) => tool.featured).length} 个</small>
+        </SpotlightCard>
+      </section>
+
+      <SpotlightCard className="ops-table" as="section">
+        <div className="panel-head">
+          <div><span>Sources</span><h2>信息源健康</h2></div>
+        </div>
+        <div className="ops-source-list">
+          {sources.map((source) => (
+            <div key={source.name} className={source.errors ? "is-warning" : ""}>
+              <strong>{source.name}</strong>
+              <span>{source.ok}/{source.runs} 次成功</span>
+              <span>候选 {source.count}</span>
+              <small>{source.lastError || "最近运行正常"}</small>
+            </div>
+          ))}
+          {!sources.length ? <p className="empty-hint">暂无来源日志。等待采集器运行一次，或手动执行采集脚本。</p> : null}
+        </div>
+      </SpotlightCard>
+
+      <SpotlightCard className="ops-table" as="section">
+        <div className="panel-head">
+          <div><span>Runs</span><h2>最近运行记录</h2></div>
+        </div>
+        <div className="ops-run-list">
+          {runs.slice(0, 8).map((run) => (
+            <div key={`${run.startedAt}-${run.finishedAt}`}>
+              <strong>{new Date(run.finishedAt || run.startedAt).toLocaleString()}</strong>
+              <span>{run.ok ? "正常" : "部分失败"} · 发现 {run.candidateCount || 0} · 新增 {run.inserted || 0}</span>
+              <small>{(run.sources || []).map((source) => `${source.label || source.name}:${source.count || 0}`).join(" / ")}</small>
+            </div>
+          ))}
+          {!runs.length ? <p className="empty-hint">暂无运行记录。</p> : null}
+        </div>
+      </SpotlightCard>
+    </section>
+  );
 }
 
 function AdminRow({ item, meta, onEdit, onDelete }) {
@@ -1908,12 +2210,14 @@ function emptyNews() {
     id: "",
     sourceCandidateId: "",
     title: "",
+    slug: "",
     kind: "资讯",
     publishedAt: new Date().toISOString().slice(0, 10),
     sourceName: "",
     sourceUrl: "",
     coverImage: "",
     summary: "",
+    bodyMarkdown: "",
     comments: 0,
     likes: 0,
     status: "published",
@@ -1924,11 +2228,13 @@ function App() {
   const path = window.location.pathname;
   if (path.startsWith("/admin")) return <AdminPage />;
   if (path.startsWith("/login")) return <LoginPage />;
+  if (path.startsWith("/submit")) return <SubmitPage />;
   if (path.startsWith("/daily-ai-news")) return <DailyNewsPage />;
+  if (path.startsWith("/news/")) return <NewsDetailPage newsSlug={path.split("/news/")[1]?.replace(/\/$/, "")} />;
   if (path.startsWith("/sites/")) return <ToolDetailPage toolId={path.split("/sites/")[1]?.replace(/\.html$/i, "").replace(/\/$/, "")} />;
   if (path.startsWith("/category/")) return <CategoryPage categoryId={path.split("/category/")[1]?.replace(/\/$/, "")} />;
   return <HomePage />;
 }
 
-export { HomePage, CategoryPage, DailyNewsPage, ToolDetailPage, LoginPage, AdminPage };
+export { HomePage, CategoryPage, SubmitPage, DailyNewsPage, NewsDetailPage, ToolDetailPage, LoginPage, AdminPage };
 export default App;

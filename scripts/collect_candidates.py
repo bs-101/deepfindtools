@@ -24,6 +24,16 @@ from server import STORE, sanitize_external_url  # noqa: E402
 
 USER_AGENT = "DeepFindToolsBot/1.0 (+https://ai.deepfindtools.com)"
 DEFAULT_LIMIT = int(os.environ.get("CANDIDATE_LIMIT", "12"))
+RUNTIME_DIR = Path(os.environ.get("RUNTIME_DIR", ROOT / "data" / "runtime"))
+RUN_LOG_PATH = RUNTIME_DIR / "collector-runs.json"
+COLLECTOR_LABELS = {
+    "collect_wechat_feeds": "微信公众号",
+    "collect_domestic_feeds": "国内 RSS",
+    "collect_36kr_ai": "36Kr AI",
+    "collect_hacker_news": "Hacker News",
+    "collect_arxiv": "arXiv 论文",
+    "collect_product_hunt": "Product Hunt",
+}
 
 CATEGORY_RULES = [
     ("code", ["code", "coding", "developer", "ide", "github", "agent", "workflow", "api", "sdk"]),
@@ -492,6 +502,18 @@ def is_duplicate(candidate: dict, fingerprints: set[str]) -> bool:
     return (normalized and f"url:{normalized.lower()}" in fingerprints) or (title and f"title:{title}" in fingerprints)
 
 
+def write_run_log(run: dict, keep: int = 100) -> None:
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        runs = json.loads(RUN_LOG_PATH.read_text(encoding="utf-8")) if RUN_LOG_PATH.exists() else []
+    except Exception:
+        runs = []
+    if not isinstance(runs, list):
+        runs = []
+    runs.append(run)
+    RUN_LOG_PATH.write_text(json.dumps(runs[-keep:], ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def collect_once(limit: int) -> int:
     collectors = [
         collect_wechat_feeds,
@@ -502,13 +524,42 @@ def collect_once(limit: int) -> int:
         collect_product_hunt,
     ]
     candidates = []
+    run = {
+        "startedAt": now_iso(),
+        "limit": limit,
+        "sources": [],
+        "candidateCount": 0,
+        "inserted": 0,
+        "ok": True,
+    }
     for collector in collectors:
+        source_start = time.time()
         try:
             found = collector(limit)
             print(f"{collector.__name__}: {len(found)} candidates")
+            run["sources"].append(
+                {
+                    "name": collector.__name__,
+                    "label": COLLECTOR_LABELS.get(collector.__name__, collector.__name__),
+                    "count": len(found),
+                    "durationMs": int((time.time() - source_start) * 1000),
+                    "ok": True,
+                }
+            )
             candidates.extend(found)
         except Exception as exc:
             print(f"{collector.__name__} failed: {exc}")
+            run["ok"] = False
+            run["sources"].append(
+                {
+                    "name": collector.__name__,
+                    "label": COLLECTOR_LABELS.get(collector.__name__, collector.__name__),
+                    "count": 0,
+                    "durationMs": int((time.time() - source_start) * 1000),
+                    "ok": False,
+                    "error": str(exc)[:240],
+                }
+            )
 
     fingerprints = existing_fingerprints()
     inserted = 0
@@ -523,6 +574,10 @@ def collect_once(limit: int) -> int:
         if normalized:
             fingerprints.add(f"url:{normalized.lower()}")
         fingerprints.add(f"title:{str(candidate.get('title') or candidate.get('name')).strip().lower()}")
+    run["candidateCount"] = len(candidates)
+    run["inserted"] = inserted
+    run["finishedAt"] = now_iso()
+    write_run_log(run)
     print(f"inserted {inserted} new candidates")
     return inserted
 
