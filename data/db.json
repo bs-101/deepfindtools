@@ -117,6 +117,23 @@
       "isNew": false
     },
     {
+      "id": "imagineclip",
+      "detailUrl": "https://imagineclip.com",
+      "url": "https://imagineclip.com",
+      "summary": "AI 视频生成工具，支持提示词、图片和效果生成头像短片与社交视频",
+      "name": "ImagineClip",
+      "logo": "https://www.google.com/s2/favicons?domain=imagineclip.com&sz=128",
+      "logoRemote": "https://www.google.com/s2/favicons?domain=imagineclip.com&sz=128",
+      "category": "video",
+      "tags": [
+        "AI视频工具",
+        "生成"
+      ],
+      "status": "published",
+      "featured": false,
+      "isNew": true
+    },
+    {
       "id": "65909",
       "detailUrl": "https://ai-bot.cn/sites/65909.html",
       "url": "https://www.miaoda.cn/?invitecode=user-1pb0xv8cighs",
