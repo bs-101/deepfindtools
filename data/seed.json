@@ -369,6 +369,23 @@
       "logoRemote": "https://ai-bot.cn/wp-content/uploads/2024/03/ihuiwa-icon.png"
     },
     {
+      "id": "imagineclip",
+      "url": "https://imagineclip.com",
+      "logo": "https://www.google.com/s2/favicons?domain=imagineclip.com&sz=128",
+      "name": "ImagineClip",
+      "tags": [
+        "AI视频工具",
+        "生成"
+      ],
+      "isNew": true,
+      "status": "published",
+      "summary": "AI 视频生成工具，支持提示词、图片和效果生成头像短片与社交视频",
+      "category": "video",
+      "featured": false,
+      "detailUrl": "https://imagineclip.com",
+      "logoRemote": "https://www.google.com/s2/favicons?domain=imagineclip.com&sz=128"
+    },
+    {
       "id": "78997",
       "url": "https://www.yoco.me/?utm_source=ai-bot.cn",
       "logo": "https://ai-bot.cn/wp-content/uploads/2026/06/yoco-icon.png",
